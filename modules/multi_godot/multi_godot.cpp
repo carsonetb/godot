@@ -1,7 +1,8 @@
 #include "multi_godot.h"
 
-#include "register_types.h"
+#include "core/variant/variant_utility.h"
 #include "modules/godotsteam/godotsteam.h"
+#include "register_types.h"
 #include "scene/main/node.h"
 
 MultiGodot::MultiGodot() {
@@ -9,24 +10,25 @@ MultiGodot::MultiGodot() {
 }
 
 void MultiGodot::_bind_methods() {
-    ClassDB::bind_method(D_METHOD("_notification", "what"), &MultiGodot::_notification);
+    ClassDB::bind_method(D_METHOD("_on_lobby_created", "connect", "this_lobby_id"), &MultiGodot::_on_lobby_created);
+    ClassDB::bind_method(D_METHOD("_on_lobby_match_list", "these_lobbies"), &MultiGodot::_on_lobby_match_list);
+    ClassDB::bind_method(D_METHOD("_on_lobby_joined", "this_lobby_id", "_permissions", "_locked", "response"), &MultiGodot::_on_lobby_joined);
+    ClassDB::bind_method(D_METHOD("_on_p2p_session_request", "remote_id"), &MultiGodot::_on_p2p_session_request);
+    ClassDB::bind_method(D_METHOD("_on_p2p_session_connect_fail", "steam_id", "session_error"), &MultiGodot::_on_p2p_session_connect_fail);
 }
 
 void MultiGodot::_notification(int what) {
-    if (what == Node::NOTIFICATION_READY) {
-        _editor_ready();
-    }
-    if (what == Node::NOTIFICATION_PROCESS) {
-        _editor_process();
+    if (what == NOTIFICATION_READY) {
+        _ready();
     }
 }
 
-void MultiGodot::_editor_ready() {
+void MultiGodot::_ready() {
     steam = Steam::get_singleton();
     if (steam) {
         ClassDB::register_class<MultiGodot>();
     } else {
-        ERR_PRINT("Steam module not found! MultiGodot will not be registered.");
+        print_error("Steam module not found! MultiGodot will not be registered.");
         return;
     }
 
@@ -37,36 +39,154 @@ void MultiGodot::_editor_ready() {
         return;
     }
 
-    print_line("Successfully initialized MultiGodot module.");
+    if (VERBOSE_DEBUG) {
+        print_line("Successfully initialized MultiGodot module.");
+    }
+
+    this_project_name = ProjectSettings::get_singleton()->get("application/name");
 
     steam->connect("lobby_created", Callable(this, "_on_lobby_created"));
     steam->connect("lobby_match_list", Callable(this, "_on_lobby_match_list"));
     steam->connect("lobby_joined", Callable(this, "_on_lobby_joined"));
-
+    steam->connect("p2p_session_request", Callable(this, "_on_p2p_session_request"));
+    steam->connect("p2p_session_connect_fail", Callable(this, "_on_p2p_session_connect_fail"));
     steam->addRequestLobbyListDistanceFilter(LOBBY_DISTANCE_FILTER_WORLDWIDE);
     steam->requestLobbyList();
-
-    _create_lobby();
 }
 
-void MultiGodot::_editor_process() {
-
+void MultiGodot::_process() {
+    if (lobby_id > 0) {
+        _read_all_p2p_packets(0);
+    }
 }
+
 
 // METHODS
 
 void MultiGodot::_create_lobby() {
     if (lobby_id == 0) {
+        is_lobby_owner = true;
         steam->createLobby(LOBBY_TYPE_PUBLIC, MAX_MEMBERS);
     }
 }
 
 void MultiGodot::_join_lobby(int this_lobby_id) {
-    print_line(String("Attempting to join lobby ") + this_lobby_id);
+    if (VERBOSE_DEBUG) {
+        print_line(String("Attempting to join lobby ") + this_lobby_id);
+    }
 
     lobby_members.clear();
 
     steam->joinLobby(this_lobby_id);
+}
+
+void MultiGodot::_get_lobby_members() {
+    lobby_members.clear();
+
+    int num_members = steam->getNumLobbyMembers(lobby_id);
+
+    for (int this_member = 0; this_member < num_members; this_member++) {
+        int member_steam_id = steam->getLobbyMemberByIndex(lobby_id, this_member);
+        String member_steam_name = steam->getFriendPersonaName(member_steam_id);
+
+        auto data_hashmap = HashMap<String, Variant>(2);
+        data_hashmap["steam_id"] = member_steam_id;
+        data_hashmap["steam_name"] = member_steam_name;
+
+        lobby_members.append(data_hashmap);
+    }
+}
+
+void MultiGodot::_make_p2p_handshake() {
+    if (VERBOSE_DEBUG) {
+        print_line("Sending P2P handshake to the lobby");
+    }
+
+    auto send_dictionary = Dictionary({
+        KeyValue<Variant, Variant>("message", "handshake"), 
+    });
+    _send_p2p_packet(0, send_dictionary);
+}
+
+void MultiGodot::_send_p2p_packet(int this_target, Dictionary packet_data, P2PSend custom_send_type, int custom_channel) {
+    PackedByteArray this_data = VariantUtilityFunctions::var_to_bytes(packet_data);
+
+    // Sending to everyone, also don't send if you're the only one in the lobby.
+    if (this_target == 0) {
+        if (lobby_members.size() > 1) {
+            for (int i = 0; i < lobby_members.size(); i++) {
+                HashMap<String, Variant> this_member = lobby_members[i];
+                if ((int)this_member.get("steam_id") != steam_id) {
+                    steam->sendP2PPacket(this_member["steam_id"], this_data, custom_send_type, custom_channel);
+                }
+            }
+        }
+    }
+    else {
+        steam->sendP2PPacket(this_target, this_data, custom_send_type, custom_channel);
+    }
+}
+
+void MultiGodot::_send_p2p_packet(int this_target, Dictionary packet_data) {
+    _send_p2p_packet(this_target, packet_data, SEND_TYPE, DEFAULT_CHANNEL);
+}
+
+void MultiGodot::_read_all_p2p_packets(int read_count) {
+    if (read_count >= PACKET_READ_LIMIT) {
+        return;
+    }
+
+    if (steam->getAvailableP2PPacketSize(0) > 0) {
+        _read_p2p_packet();
+        _read_all_p2p_packets(read_count + 1);
+    }
+}
+
+void MultiGodot::_read_p2p_packet() {
+    int packet_size = steam->getAvailableP2PPacketSize(0);
+
+    if (packet_size > 0) {
+        Dictionary this_packet = steam->readP2PPacket(packet_size, 0);
+
+        if (this_packet.is_empty()) {
+            print_error("WARNING: Read an empty packet with non-zero size!");
+            return;
+        }
+
+        int packet_sender = this_packet["remote_steam_id"];
+        PackedByteArray packet_code = this_packet["data"];
+        Dictionary readable_data = VariantUtilityFunctions::bytes_to_var(packet_code);
+
+        // ALWAYS have message value. 
+        String message = readable_data["message"];
+        if (message == "handshake") {
+            auto response = Dictionary({
+                KeyValue<Variant, Variant>("message", "handshake_received"),
+            });
+            _send_p2p_packet(packet_sender, response);
+        }
+        if (message == "handshake_received") {
+            handshake_completed_with.append(packet_sender);
+        }
+    }
+}
+
+void MultiGodot::_leave_lobby() {
+    if (lobby_id != 0) {
+        steam->leaveLobby(lobby_id);
+        is_lobby_owner = false;
+        lobby_id = 0;
+
+        for (int i = 0; i < lobby_members.size(); i++) {
+            HashMap<String, Variant> this_member = lobby_members[i];
+            Variant this_user = this_member["steam_id"];
+            if (this_user != Variant(steam_id)) {
+                steam->closeP2PSessionWithUser(this_user);
+            }
+        }
+
+        lobby_members.clear();
+    }
 }
 
 // SIGNALS
@@ -74,23 +194,38 @@ void MultiGodot::_join_lobby(int this_lobby_id) {
 void MultiGodot::_on_lobby_created(int connect, int this_lobby_id) {
     if (connect == 1) {
         lobby_id = this_lobby_id;
-        print_line("Created a lobby: " + lobby_id);
+        if (VERBOSE_DEBUG) {
+            print_line("Created a lobby");
+        }
 
         steam->setLobbyJoinable(lobby_id, true);
-        steam->setLobbyData(lobby_id, "name", ProjectSettings::get_singleton()->get("application/name"));
+        steam->setLobbyData(lobby_id, "name", this_project_name);
         steam->setLobbyData(lobby_id, "mode", "MultiGodotProject");
         steam->allowP2PPacketRelay(true);
     }
 }
 
 void MultiGodot::_on_lobby_match_list(Array these_lobbies) {
+    if (VERBOSE_DEBUG) {
+        print_line("Match lobby list:");
+        print_line(these_lobbies);
+    }
     for (int i = 0; i < these_lobbies.size(); i++) {
-        Variant this_lobby = these_lobbies[i];
+        int this_lobby = these_lobbies[i];
         
         String lobby_name = steam->getLobbyData(this_lobby, "name");
         String lobby_mode = steam->getLobbyData(this_lobby, "mode");
         int lobby_num_members = steam->getNumLobbyMembers(this_lobby);
+
+        if (lobby_name == this_project_name && lobby_mode == "MultiGodotProject") {
+            _join_lobby(this_lobby);
+            return;
+        }
     }
+    if (VERBOSE_DEBUG) {
+        print_line("No lobbies found for this project, creating one.");
+    }
+    _create_lobby();
 }
 
 void MultiGodot::_on_lobby_joined(int this_lobby_id, int _permissions, bool _locked, int response) {
@@ -98,7 +233,9 @@ void MultiGodot::_on_lobby_joined(int this_lobby_id, int _permissions, bool _loc
         lobby_id = this_lobby_id;
 
         _get_lobby_members();
-        _make_p2p_handshake();
+        if (!is_lobby_owner) {
+            _make_p2p_handshake();
+        }
     }
     else {
         String fail_reason;
@@ -115,13 +252,54 @@ void MultiGodot::_on_lobby_joined(int this_lobby_id, int _permissions, bool _loc
             case CHAT_ROOM_ENTER_RESPONSE_MEMBER_BLOCKED_YOU: fail_reason = "A user in the lobby has blocked you from joining."; break;
             case CHAT_ROOM_ENTER_RESPONSE_YOU_BLOCKED_MEMBER: fail_reason = "A user you have blocked is in the lobby."; break;
         }
+
+        print_error("Failed to join lobby associated with this project. Error: " + fail_reason);
     }
 }
 
-void MultiGodot::_get_lobby_members() {
+void MultiGodot::_on_lobby_chat_update(int this_lobby_id, int change_id, int making_change_id, int chat_state) {
+    String changer_name = steam->getFriendPersonaName(change_id);
 
+    if (VERBOSE_DEBUG) {
+        switch (chat_state) {
+            case CHAT_MEMBER_STATE_CHANGE_ENTERED:
+                print_line(changer_name + " has joined the lobby."); break;
+            case CHAT_MEMBER_STATE_CHANGE_LEFT:
+                print_line(changer_name + " has left"); break;
+        }
+    }
+
+    _get_lobby_members();
 }
 
-void MultiGodot::_make_p2p_handshake() {
+void MultiGodot::_on_p2p_session_request(int remote_id) {
+    String this_requester = steam->getFriendPersonaName(remote_id);
+    if (VERBOSE_DEBUG) {
+        print_line(this_requester + " is requesting a P2P session.");
+    }
 
+    steam->acceptP2PSessionWithUser(remote_id);
+
+    if (!is_lobby_owner) {
+        _make_p2p_handshake();
+    }
+}
+
+void MultiGodot::_on_p2p_session_connect_fail(int this_steam_id, int session_error) {
+    switch (session_error) {
+        case 0: print_line("WARNING: Session failure: no error given (task failed successfully!)"); break;
+        case 1: print_line("WARNING: Session failure: target user not running the same game"); break;
+        case 2: print_line("WARNING: Session failure: local user doesn't own app / game"); break;
+        case 3: print_line("WARNING: Session failure: target user isn't connected to Steam"); break;
+        case 4: print_line("WARNING: Session failure: connection timed out"); break;
+        case 5: print_line("WARNING: Session failure: unused"); break;
+        default:print_line("WARNING: Session failure: unknown error"); break;
+    }
+}
+
+// PLUGIN
+
+MultiGodotPlugin::MultiGodotPlugin() {
+    multi_godot = memnew(MultiGodot);
+    EditorNode::get_singleton()->add_child(multi_godot);
 }

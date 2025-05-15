@@ -2,4 +2,20 @@ from misc.utility.scons_hints import *
 
 Import('env')
 
-env.add_source_files(env.modules_sources, "*.cpp")
+sources = [
+    "multi_godot.cpp",
+    "register_types.cpp",
+]
+
+module_env = env.Clone()
+module_env.Append(CCFLAGS=['-02'])
+
+if ARGUMENTS.get('multi_godot_shared', 'no') == 'yes':
+    module_env.Append(CCFLAGS=['-fPIC'])
+    module_env['LIBS'] = []
+    shared_lib = module_env.SharedLibrary(target='#bin/multi_godot', source=sources)
+    shared_lib_shim = shared_lib[0].name.rsplit('.', 1)[0]
+    env.Append(LIBS=[shared_lib_shim])
+    env.Append(LIBPATH=['#bin'])
+else:
+    env.add_source_files(env.modules_sources, sources)
