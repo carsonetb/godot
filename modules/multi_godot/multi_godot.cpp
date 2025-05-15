@@ -120,7 +120,7 @@ void MultiGodot::_send_p2p_packet(int this_target, Dictionary packet_data, P2PSe
         if (lobby_members.size() > 1) {
             for (int i = 0; i < lobby_members.size(); i++) {
                 HashMap<String, Variant> this_member = lobby_members[i];
-                if ((int)this_member.get("steam_id") != steam_id) {
+                if ((uint64_t)this_member.get("steam_id") != steam_id) {
                     steam->sendP2PPacket(this_member["steam_id"], this_data, custom_send_type, custom_channel);
                 }
             }
@@ -215,7 +215,7 @@ void MultiGodot::_on_lobby_match_list(Array these_lobbies) {
         print_line(these_lobbies);
     }
     for (int i = 0; i < these_lobbies.size(); i++) {
-        int this_lobby = these_lobbies[i];
+        uint64_t this_lobby = these_lobbies[i];
         
         String lobby_name = steam->getLobbyData(this_lobby, "name");
         String lobby_mode = steam->getLobbyData(this_lobby, "mode");

@@ -17,8 +17,8 @@ class MultiGodot : public Node {
         static const int DEFAULT_CHANNEL = 0;
 
         Steam *steam;
-        int lobby_id = 0;
-        int steam_id = 0;
+        uint64_t lobby_id = 0;
+        uint64_t steam_id = 0;
         bool is_lobby_owner = false;
         String this_project_name;
         Vector<HashMap<String, Variant>> lobby_members;
