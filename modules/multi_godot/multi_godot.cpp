@@ -43,7 +43,11 @@ void MultiGodot::_ready() {
         print_line("Successfully initialized MultiGodot module.");
     }
 
-    this_project_name = ProjectSettings::get_singleton()->get("application/name");
+    this_project_name = ProjectSettings::get_singleton()->get("application/config/name");
+
+    if (VERBOSE_DEBUG) {
+        print_line("Project name: " + this_project_name);
+    }
 
     steam->connect("lobby_created", Callable(this, "_on_lobby_created"));
     steam->connect("lobby_match_list", Callable(this, "_on_lobby_match_list"));
