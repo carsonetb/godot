@@ -4,6 +4,7 @@
 #include "modules/godotsteam/godotsteam.h"
 #include "register_types.h"
 #include "scene/main/node.h"
+#include "scene/gui/button.h"
 
 MultiGodot::MultiGodot() {}
 
@@ -14,6 +15,13 @@ void MultiGodot::_bind_methods() {
     ClassDB::bind_method(D_METHOD("_on_lobby_chat_update", "this_lobby_id", "change_id", "making_change_id", "chat_state"), &MultiGodot::_on_lobby_chat_update);
     ClassDB::bind_method(D_METHOD("_on_p2p_session_request", "remote_id"), &MultiGodot::_on_p2p_session_request);
     ClassDB::bind_method(D_METHOD("_on_p2p_session_connect_fail", "steam_id", "session_error"), &MultiGodot::_on_p2p_session_connect_fail);
+
+    // Setters & Getters
+    ClassDB::bind_method(D_METHOD("set_remote_mouse_positions", "var"), &MultiGodot::set_remote_mouse_positions);
+    ClassDB::bind_method(D_METHOD("get_remote_mouse_positions"), &MultiGodot::get_remote_mouse_positions);
+
+    ClassDB::add_property("MultiGodot", PropertyInfo(Variant::Type::ARRAY, "remote_mouse_positions"), "set_remote_mouse_positions", "get_remote_mouse_positions");
+
 }
 
 void MultiGodot::_notification(int what) {
@@ -23,11 +31,16 @@ void MultiGodot::_notification(int what) {
     if (what == NOTIFICATION_INTERNAL_PROCESS) {
         _process();
     }
+    if (what == NOTIFICATION_DRAW) {
+        _draw();
+    }
 }
 
 void MultiGodot::_ready() {
+    set_process_internal(true);
     steam = Steam::get_singleton();
     editor_node_singleton = EditorNode::get_singleton();
+
     if (steam) {
         ClassDB::register_class<MultiGodot>();
     } else {
@@ -67,10 +80,17 @@ void MultiGodot::_process() {
         _read_all_p2p_packets(0);
     }
 
-    Vector2 mouse_pos = Input::get_singleton()->get_mouse_position();
-    editor_node_singleton->print_tree();
+    _sync_var(this, "remote_mouse_positions");
+
+    queue_redraw();
 }
 
+void MultiGodot::_draw() {
+    for (int i = 0; i < remote_mouse_positions.size(); i++) {
+        Vector2 pos = remote_mouse_positions[i];
+        draw_circle(pos, 20, Color(1, 1, 1));
+    }
+}
 
 // METHODS
 
@@ -179,6 +199,16 @@ void MultiGodot::_read_p2p_packet() {
         if (message == "handshake_received") {
             handshake_completed_with.append(packet_sender);
         }
+        if (message == "sync_var") {
+            NodePath path = readable_data["path"];
+            StringName property = readable_data["property"];
+            Variant value = readable_data["value"];
+            Node *node = editor_node_singleton->get_node_or_null(path);
+            if (!node) {
+                print_error("Remote set on null node at path" + String(path));
+            }
+            node->set(property, value);
+        }
     }
 }
 
@@ -198,6 +228,18 @@ void MultiGodot::_leave_lobby() {
 
         lobby_members.clear();
     }
+}
+
+void MultiGodot::_sync_var(Node *node, StringName property) {
+    NodePath path = editor_node_singleton->get_path_to(node);
+    Variant value = editor_node_singleton->get_node(path)->get(property);
+    auto send_dictionary = Dictionary({
+        KeyValue<Variant, Variant>("message", "sync_var"),
+        KeyValue<Variant, Variant>("path", path),
+        KeyValue<Variant, Variant>("property", property),
+        KeyValue<Variant, Variant>("value", value),
+    });
+    _send_p2p_packet(0, send_dictionary);
 }
 
 // SIGNALS
@@ -312,5 +354,7 @@ void MultiGodot::_on_p2p_session_connect_fail(int this_steam_id, int session_err
 
 MultiGodotPlugin::MultiGodotPlugin() {
     multi_godot = memnew(MultiGodot);
-    EditorNode::get_singleton()->add_child(multi_godot);
+    EditorNode *node = EditorNode::get_singleton();
+    node->add_child(multi_godot);
+    set_owner(node);
 }

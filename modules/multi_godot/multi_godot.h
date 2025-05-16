@@ -2,12 +2,13 @@
 #define MULTI_GODOT_H
 
 #include "core/object/ref_counted.h"
-#include "modules/godotsteam/godotsteam.h"
 #include "editor/editor_node.h"
 #include "editor/plugins/editor_plugin.h"
+#include "modules/godotsteam/godotsteam.h"
+#include "scene/2d/node_2d.h"
 
-class MultiGodot : public Node {
-    GDCLASS(MultiGodot, Node);
+class MultiGodot : public Node2D {
+    GDCLASS(MultiGodot, Node2D);
 
     protected:
         static const int PACKET_READ_LIMIT = 32;
@@ -24,13 +25,22 @@ class MultiGodot : public Node {
         Vector<HashMap<String, Variant>> lobby_members;
         Vector<int> handshake_completed_with;
         EditorNode *editor_node_singleton;
+        bool printed = false;
+
+        // Remote properties
+        TypedArray<Vector2> remote_mouse_positions;
+
+        // BUILTINS
 
         static void _bind_methods();
-        void _create_lobby();
-        void _join_lobby(int this_lobby_id);
         void _notification(int what);
         void _ready();
         void _process();
+        void _draw();
+
+        // METHODS
+        void _create_lobby();
+        void _join_lobby(int this_lobby_id);
         void _get_lobby_members();
         void _make_p2p_handshake();
         void _send_p2p_packet(int this_target, Dictionary packet_data, P2PSend custom_send_type, int custom_channel);
@@ -38,6 +48,10 @@ class MultiGodot : public Node {
         void _read_all_p2p_packets(int read_count);
         void _read_p2p_packet();
         void _leave_lobby();
+        void _sync_var(Node *node, StringName property);
+
+        // SIGNALS
+
         void _on_lobby_created(int connect, int this_lobby_id);
         void _on_lobby_match_list(Array these_lobbies);
         void _on_lobby_joined(int this_lobby_id, int _permissions, bool _locked, int response);
@@ -47,6 +61,11 @@ class MultiGodot : public Node {
     
     public:
         MultiGodot();
+
+        // SETTERS & GETTERS
+
+        void                set_remote_mouse_positions(TypedArray<Vector2> var) {remote_mouse_positions = var;}
+        TypedArray<Vector2> get_remote_mouse_positions()                        {return remote_mouse_positions;}
 };
 
 class MultiGodotPlugin : public EditorPlugin {
