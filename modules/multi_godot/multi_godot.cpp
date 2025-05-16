@@ -284,9 +284,7 @@ void MultiGodot::_on_lobby_joined(uint64_t this_lobby_id, int _permissions, bool
         lobby_id = this_lobby_id;
 
         _get_lobby_members();
-        if (!is_lobby_owner) {
-            _make_p2p_handshake();
-        }
+        _make_p2p_handshake();
     }
     else {
         String fail_reason;
@@ -332,6 +330,7 @@ void MultiGodot::_on_p2p_session_request(uint64_t remote_id) {
     steam->acceptP2PSessionWithUser(remote_id);
 
     _make_p2p_handshake();
+    _get_lobby_members();
 }
 
 void MultiGodot::_on_p2p_session_connect_fail(uint64_t this_steam_id, int session_error) {
