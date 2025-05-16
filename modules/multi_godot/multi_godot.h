@@ -53,7 +53,7 @@ class MultiGodot : public Node2D {
 
         // REMOTE CALLABLES
 
-        void _set_mouse_position(uint64_t sender, Vector2 position) {mouse_positions.insert(sender, position);}
+        void _set_mouse_position(uint64_t sender, Vector2 pos) {mouse_positions.insert(sender, pos);}
 
         // SIGNALS
 

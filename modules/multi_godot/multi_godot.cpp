@@ -56,6 +56,7 @@ void MultiGodot::_ready() {
         print_line("Successfully initialized MultiGodot module.");
     }
 
+    steam_id = steam->getSteamID();
     this_project_name = ProjectSettings::get_singleton()->get("application/config/name");
 
     if (VERBOSE_DEBUG) {
@@ -77,7 +78,7 @@ void MultiGodot::_process() {
         _read_all_p2p_packets(0);
     }
 
-    _call_func(this, "_set_mouse_position", {Input::get_singleton()->get_mouse_position()});
+    _call_func(this, "_set_mouse_position", {steam_id, Input::get_singleton()->get_mouse_position()});
 
     queue_redraw();
 }
@@ -85,6 +86,9 @@ void MultiGodot::_process() {
 void MultiGodot::_draw() {
     for (int i = 0; i < handshake_completed_with.size(); i++) {
         uint64_t key = handshake_completed_with[i];
+        if (!mouse_positions.has(key)) {
+            continue;
+        }
         Vector2 pos = mouse_positions.get(key);
         draw_circle(pos, 20, Color(1, 1, 1));
     }
@@ -213,7 +217,7 @@ void MultiGodot::_read_p2p_packet() {
             if (!node) {
                 print_error("Remote function call on null node at path " + String(path));
             }
-            node->call(function_name);
+            node->callv(function_name, args);
         }
     }
 }
