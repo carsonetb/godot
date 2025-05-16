@@ -23,12 +23,12 @@ class MultiGodot : public Node2D {
         bool is_lobby_owner = false;
         String this_project_name;
         Vector<HashMap<String, Variant>> lobby_members;
-        Vector<int> handshake_completed_with;
+        Vector<uint64_t> handshake_completed_with;
         EditorNode *editor_node_singleton;
         bool printed = false;
 
         // Remote properties
-        TypedArray<Vector2> remote_mouse_positions;
+        HashMap<uint64_t, Vector2> mouse_positions;
 
         // BUILTINS
 
@@ -49,6 +49,11 @@ class MultiGodot : public Node2D {
         void _read_p2p_packet();
         void _leave_lobby();
         void _sync_var(Node *node, StringName property);
+        void _call_func(Node *node, String function_name, Array args);
+
+        // REMOTE CALLABLES
+
+        void _set_mouse_position(uint64_t sender, Vector2 position) {mouse_positions.insert(sender, position);}
 
         // SIGNALS
 
@@ -64,8 +69,6 @@ class MultiGodot : public Node2D {
 
         // SETTERS & GETTERS
 
-        void                set_remote_mouse_positions(TypedArray<Vector2> var) {remote_mouse_positions = var;}
-        TypedArray<Vector2> get_remote_mouse_positions()                        {return remote_mouse_positions;}
 };
 
 class MultiGodotPlugin : public EditorPlugin {
