@@ -117,7 +117,7 @@ void MultiGodot::_get_lobby_members() {
     int num_members = steam->getNumLobbyMembers(lobby_id);
 
     for (int this_member = 0; this_member < num_members; this_member++) {
-        int member_steam_id = steam->getLobbyMemberByIndex(lobby_id, this_member);
+        uint64_t member_steam_id = steam->getLobbyMemberByIndex(lobby_id, this_member);
         String member_steam_name = steam->getFriendPersonaName(member_steam_id);
 
         auto data_hashmap = HashMap<String, Variant>(2);
