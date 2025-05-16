@@ -40,11 +40,11 @@ class MultiGodot : public Node2D {
 
         // METHODS
         void _create_lobby();
-        void _join_lobby(int this_lobby_id);
+        void _join_lobby(uint64_t this_lobby_id);
         void _get_lobby_members();
         void _make_p2p_handshake();
-        void _send_p2p_packet(int this_target, Dictionary packet_data, P2PSend custom_send_type, int custom_channel);
-        void _send_p2p_packet(int this_target, Dictionary packet_data);
+        void _send_p2p_packet(uint64_t this_target, Dictionary packet_data, P2PSend custom_send_type, int custom_channel);
+        void _send_p2p_packet(uint64_t this_target, Dictionary packet_data);
         void _read_all_p2p_packets(int read_count);
         void _read_p2p_packet();
         void _leave_lobby();
@@ -52,12 +52,12 @@ class MultiGodot : public Node2D {
 
         // SIGNALS
 
-        void _on_lobby_created(int connect, int this_lobby_id);
+        void _on_lobby_created(int connect, uint64_t this_lobby_id);
         void _on_lobby_match_list(Array these_lobbies);
-        void _on_lobby_joined(int this_lobby_id, int _permissions, bool _locked, int response);
-        void _on_lobby_chat_update(int this_lobby_id, int change_id, int making_change_id, int chat_state);
-        void _on_p2p_session_request(int remote_id);
-        void _on_p2p_session_connect_fail(int this_steam_id, int session_error);
+        void _on_lobby_joined(uint64_t this_lobby_id, int _permissions, bool _locked, int response);
+        void _on_lobby_chat_update(uint64_t this_lobby_id, uint64_t change_id, uint64_t making_change_id, int chat_state);
+        void _on_p2p_session_request(uint64_t remote_id);
+        void _on_p2p_session_connect_fail(uint64_t this_steam_id, int session_error);
     
     public:
         MultiGodot();

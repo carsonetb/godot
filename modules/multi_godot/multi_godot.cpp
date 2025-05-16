@@ -101,7 +101,7 @@ void MultiGodot::_create_lobby() {
     }
 }
 
-void MultiGodot::_join_lobby(int this_lobby_id) {
+void MultiGodot::_join_lobby(uint64_t this_lobby_id) {
     if (VERBOSE_DEBUG) {
         print_line(String("Attempting to join lobby ") + this_lobby_id);
     }
@@ -139,7 +139,7 @@ void MultiGodot::_make_p2p_handshake() {
     _send_p2p_packet(0, send_dictionary);
 }
 
-void MultiGodot::_send_p2p_packet(int this_target, Dictionary packet_data, P2PSend custom_send_type, int custom_channel) {
+void MultiGodot::_send_p2p_packet(uint64_t this_target, Dictionary packet_data, P2PSend custom_send_type, int custom_channel) {
     PackedByteArray this_data = VariantUtilityFunctions::var_to_bytes(packet_data);
 
     // Sending to everyone, also don't send if you're the only one in the lobby.
@@ -158,7 +158,7 @@ void MultiGodot::_send_p2p_packet(int this_target, Dictionary packet_data, P2PSe
     }
 }
 
-void MultiGodot::_send_p2p_packet(int this_target, Dictionary packet_data) {
+void MultiGodot::_send_p2p_packet(uint64_t this_target, Dictionary packet_data) {
     _send_p2p_packet(this_target, packet_data, SEND_TYPE, DEFAULT_CHANNEL);
 }
 
@@ -244,7 +244,7 @@ void MultiGodot::_sync_var(Node *node, StringName property) {
 
 // SIGNALS
 
-void MultiGodot::_on_lobby_created(int connect, int this_lobby_id) {
+void MultiGodot::_on_lobby_created(int connect, uint64_t this_lobby_id) {
     if (connect == 1) {
         lobby_id = this_lobby_id;
         if (VERBOSE_DEBUG) {
@@ -281,7 +281,7 @@ void MultiGodot::_on_lobby_match_list(Array these_lobbies) {
     _create_lobby();
 }
 
-void MultiGodot::_on_lobby_joined(int this_lobby_id, int _permissions, bool _locked, int response) {
+void MultiGodot::_on_lobby_joined(uint64_t this_lobby_id, int _permissions, bool _locked, int response) {
     if (response == CHAT_ROOM_ENTER_RESPONSE_SUCCESS) {
         lobby_id = this_lobby_id;
 
@@ -310,7 +310,7 @@ void MultiGodot::_on_lobby_joined(int this_lobby_id, int _permissions, bool _loc
     }
 }
 
-void MultiGodot::_on_lobby_chat_update(int this_lobby_id, int change_id, int making_change_id, int chat_state) {
+void MultiGodot::_on_lobby_chat_update(uint64_t this_lobby_id, uint64_t change_id, uint64_t making_change_id, int chat_state) {
     String changer_name = steam->getFriendPersonaName(change_id);
 
     if (VERBOSE_DEBUG) {
@@ -325,7 +325,7 @@ void MultiGodot::_on_lobby_chat_update(int this_lobby_id, int change_id, int mak
     _get_lobby_members();
 }
 
-void MultiGodot::_on_p2p_session_request(int remote_id) {
+void MultiGodot::_on_p2p_session_request(uint64_t remote_id) {
     String this_requester = steam->getFriendPersonaName(remote_id);
     if (VERBOSE_DEBUG) {
         print_line(this_requester + " is requesting a P2P session.");
@@ -338,7 +338,7 @@ void MultiGodot::_on_p2p_session_request(int remote_id) {
     }
 }
 
-void MultiGodot::_on_p2p_session_connect_fail(int this_steam_id, int session_error) {
+void MultiGodot::_on_p2p_session_connect_fail(uint64_t this_steam_id, int session_error) {
     switch (session_error) {
         case 0: print_line("WARNING: Session failure: no error given (task failed successfully!)"); break;
         case 1: print_line("WARNING: Session failure: target user not running the same game"); break;
