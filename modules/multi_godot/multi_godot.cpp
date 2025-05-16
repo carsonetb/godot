@@ -190,6 +190,10 @@ void MultiGodot::_read_p2p_packet() {
         PackedByteArray packet_code = this_packet["data"];
         Dictionary readable_data = VariantUtilityFunctions::bytes_to_var(packet_code);
 
+        if (handshake_completed_with.has(packet_sender)) {
+            handshake_completed_with.append(packet_sender);
+        }
+
         // ALWAYS have message value. 
         String message = readable_data["message"];
         if (message == "handshake") {
@@ -197,7 +201,6 @@ void MultiGodot::_read_p2p_packet() {
                 print_line("Handshake completed with:");
                 print_line(packet_sender);
             }
-            handshake_completed_with.append(packet_sender);
         }
         if (message == "sync_var") {
             NodePath path = readable_data["path"];
