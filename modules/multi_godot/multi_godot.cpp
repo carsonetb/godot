@@ -184,19 +184,17 @@ void MultiGodot::_read_p2p_packet() {
             return;
         }
 
-        int packet_sender = this_packet["remote_steam_id"];
+        uint64_t packet_sender = this_packet["remote_steam_id"];
         PackedByteArray packet_code = this_packet["data"];
         Dictionary readable_data = VariantUtilityFunctions::bytes_to_var(packet_code);
 
         // ALWAYS have message value. 
         String message = readable_data["message"];
         if (message == "handshake") {
-            auto response = Dictionary({
-                KeyValue<Variant, Variant>("message", "handshake_received"),
-            });
-            _send_p2p_packet(packet_sender, response);
-        }
-        if (message == "handshake_received") {
+            if (VERBOSE_DEBUG) {
+                print_line("Handshake completed with:");
+                print_line(packet_sender);
+            }
             handshake_completed_with.append(packet_sender);
         }
         if (message == "sync_var") {
@@ -333,9 +331,7 @@ void MultiGodot::_on_p2p_session_request(uint64_t remote_id) {
 
     steam->acceptP2PSessionWithUser(remote_id);
 
-    if (!is_lobby_owner) {
-        _make_p2p_handshake();
-    }
+    _make_p2p_handshake();
 }
 
 void MultiGodot::_on_p2p_session_connect_fail(uint64_t this_steam_id, int session_error) {
