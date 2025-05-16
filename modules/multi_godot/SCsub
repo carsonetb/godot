@@ -8,7 +8,6 @@ sources = [
 ]
 
 module_env = env.Clone()
-module_env.Append(CCFLAGS=['-02'])
 
 if ARGUMENTS.get('multi_godot_shared', 'no') == 'yes':
     module_env.Append(CCFLAGS=['-fPIC'])

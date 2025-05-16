@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="MultiGodot" inherits="Node" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
+	<brief_description>
+		A module that uses GodotSteam to create a multi-user Godot experiencce.
+	</brief_description>
+	<description>
+		(When finished) MultiGodot can sync files in your project and visualize objects as they're moved around by other people. This module is automatically loaded into the editor so there's no need for you to instantiate it in a script.
+	</description>
+	<tutorials>
+	</tutorials>
+</class>

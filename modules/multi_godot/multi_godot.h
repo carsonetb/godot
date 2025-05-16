@@ -23,6 +23,7 @@ class MultiGodot : public Node {
         String this_project_name;
         Vector<HashMap<String, Variant>> lobby_members;
         Vector<int> handshake_completed_with;
+        EditorNode *editor_node_singleton;
 
         static void _bind_methods();
         void _create_lobby();

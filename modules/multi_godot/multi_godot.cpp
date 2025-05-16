@@ -5,14 +5,13 @@
 #include "register_types.h"
 #include "scene/main/node.h"
 
-MultiGodot::MultiGodot() {
-
-}
+MultiGodot::MultiGodot() {}
 
 void MultiGodot::_bind_methods() {
     ClassDB::bind_method(D_METHOD("_on_lobby_created", "connect", "this_lobby_id"), &MultiGodot::_on_lobby_created);
     ClassDB::bind_method(D_METHOD("_on_lobby_match_list", "these_lobbies"), &MultiGodot::_on_lobby_match_list);
     ClassDB::bind_method(D_METHOD("_on_lobby_joined", "this_lobby_id", "_permissions", "_locked", "response"), &MultiGodot::_on_lobby_joined);
+    ClassDB::bind_method(D_METHOD("_on_lobby_chat_update", "this_lobby_id", "change_id", "making_change_id", "chat_state"), &MultiGodot::_on_lobby_chat_update);
     ClassDB::bind_method(D_METHOD("_on_p2p_session_request", "remote_id"), &MultiGodot::_on_p2p_session_request);
     ClassDB::bind_method(D_METHOD("_on_p2p_session_connect_fail", "steam_id", "session_error"), &MultiGodot::_on_p2p_session_connect_fail);
 }
@@ -21,10 +20,14 @@ void MultiGodot::_notification(int what) {
     if (what == NOTIFICATION_READY) {
         _ready();
     }
+    if (what == NOTIFICATION_INTERNAL_PROCESS) {
+        _process();
+    }
 }
 
 void MultiGodot::_ready() {
     steam = Steam::get_singleton();
+    editor_node_singleton = EditorNode::get_singleton();
     if (steam) {
         ClassDB::register_class<MultiGodot>();
     } else {
@@ -52,6 +55,7 @@ void MultiGodot::_ready() {
     steam->connect("lobby_created", Callable(this, "_on_lobby_created"));
     steam->connect("lobby_match_list", Callable(this, "_on_lobby_match_list"));
     steam->connect("lobby_joined", Callable(this, "_on_lobby_joined"));
+    steam->connect("lobby_chat_update", Callable(this, "_on_lobby_chat_up"));
     steam->connect("p2p_session_request", Callable(this, "_on_p2p_session_request"));
     steam->connect("p2p_session_connect_fail", Callable(this, "_on_p2p_session_connect_fail"));
     steam->addRequestLobbyListDistanceFilter(LOBBY_DISTANCE_FILTER_WORLDWIDE);
@@ -62,6 +66,9 @@ void MultiGodot::_process() {
     if (lobby_id > 0) {
         _read_all_p2p_packets(0);
     }
+
+    Vector2 mouse_pos = Input::get_singleton()->get_mouse_position();
+    editor_node_singleton->print_tree();
 }
 
 
@@ -219,7 +226,7 @@ void MultiGodot::_on_lobby_match_list(Array these_lobbies) {
         
         String lobby_name = steam->getLobbyData(this_lobby, "name");
         String lobby_mode = steam->getLobbyData(this_lobby, "mode");
-        int lobby_num_members = steam->getNumLobbyMembers(this_lobby);
+        // int lobby_num_members = steam->getNumLobbyMembers(this_lobby);
 
         if (lobby_name == this_project_name && lobby_mode == "MultiGodotProject") {
             _join_lobby(this_lobby);
