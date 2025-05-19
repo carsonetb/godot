@@ -11,12 +11,72 @@ class MultiGodot : public Node2D {
     GDCLASS(MultiGodot, Node2D);
 
     protected:
+        enum class RemoteCenterStatus {
+            VIEWPORT_2D,
+            VIEWPORT_3D,
+            SCRIPT_EDITOR,
+            OTHER,
+        };
+
+        enum class RemoteSidePanelStatus {
+            INSPECTOR,
+            NODE,
+            HISTORY,
+        };
+
+        enum class RemoteProjectSettingsStatus {
+            GENERAL,
+            INPUT_MAP,
+            LOCALIZATION,
+            GLOBALS,
+            PLUGINS,
+            IMPORT_DEFAULTS,
+        };
+
+        enum class RemoteProjectSettingsGeneralStatus {
+            CONFIG,
+            RUN,
+            BOOT_SPLASH,
+            GENERAL,
+            WINDOW,
+            MOUSE_CURSOR,
+            BUSES,
+            RENDERING,
+            LOCALE,
+            COMMON,
+            FONTS,
+            THEME,
+            TEXTURES,
+            RENDERER,
+            VIEWPORT,
+            ANTI_ALIASING,
+            ENVIRONMENT,
+            RENDERING_2D,
+            POINTING,
+            SENSORS,
+            PHYSICS_COMMON,
+            PHYSICS_2D,
+            PHYSICS_3D,
+            OPENXR,
+            SHADERS,
+            MOVIE_WRITER,
+            INITIALIZATION,
+            NAVIGATION_3D,
+            NAVIGATION_2D,
+            RENDER_2D,
+            RENDER_3D,
+            LAYER_NAMES_PHYSICS_2D,
+            LAYER_NAMES_NAVIGATION_2D,
+            LATER_NAMES_3D,
+        };
+
         static const int PACKET_READ_LIMIT = 32;
         static const int MAX_MEMBERS = 4; // Possibly increase this in the future if there is a need.
         static const bool VERBOSE_DEBUG = true;
         static const P2PSend SEND_TYPE = P2P_SEND_UNRELIABLE;
         static const int DEFAULT_CHANNEL = 0;
 
+        HashMap<uint64_t, HashMap<String, Variant>> user_data;
         Steam *steam;
         uint64_t lobby_id = 0;
         uint64_t steam_id = 0;

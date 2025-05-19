@@ -190,7 +190,7 @@ void MultiGodot::_read_p2p_packet() {
         PackedByteArray packet_code = this_packet["data"];
         Dictionary readable_data = VariantUtilityFunctions::bytes_to_var(packet_code);
 
-        if (handshake_completed_with.has(packet_sender)) {
+        if (!handshake_completed_with.has(packet_sender)) {
             handshake_completed_with.append(packet_sender);
         }
 
