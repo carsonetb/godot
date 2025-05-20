@@ -1,6 +1,9 @@
 #include "multi_godot.h"
 
+#include "core/object/script_language.h"
 #include "core/variant/variant_utility.h"
+#include "editor/editor_main_screen.h"
+#include "editor/plugins/script_editor_plugin.h"
 #include "modules/godotsteam/godotsteam.h"
 #include "register_types.h"
 #include "scene/main/node.h"
@@ -16,6 +19,13 @@ void MultiGodot::_bind_methods() {
     ClassDB::bind_method(D_METHOD("_on_p2p_session_request", "remote_id"), &MultiGodot::_on_p2p_session_request);
     ClassDB::bind_method(D_METHOD("_on_p2p_session_connect_fail", "steam_id", "session_error"), &MultiGodot::_on_p2p_session_connect_fail);
     ClassDB::bind_method(D_METHOD("_set_mouse_position", "sender", "position"), &MultiGodot::_set_mouse_position);
+    ClassDB::bind_method(D_METHOD("_set_user_data", "sender", "item", "data"), &MultiGodot::_set_user_data);
+    ClassDB::bind_method(D_METHOD("_update_script_different", "path", "remote_code"), &MultiGodot::_update_script_different);
+
+    // Button signals
+
+    ClassDB::bind_method(D_METHOD("_on_main_screen_selected", "index"), &MultiGodot::_on_main_screen_selected);
+    ClassDB::bind_method(D_METHOD("_on_script_tab_changed", "path"), &MultiGodot::_on_script_tab_changed);
 
     // Setters & Getters
 
@@ -35,8 +45,13 @@ void MultiGodot::_notification(int what) {
 
 void MultiGodot::_ready() {
     set_process_internal(true);
+
     steam = Steam::get_singleton();
     editor_node_singleton = EditorNode::get_singleton();
+    script_editor = ScriptEditor::get_singleton();
+
+    button_notifier = memnew(ButtonNotifier);
+    add_child(button_notifier);
 
     if (steam) {
         ClassDB::register_class<MultiGodot>();
@@ -63,6 +78,8 @@ void MultiGodot::_ready() {
         print_line("Project name: " + this_project_name);
     }
 
+    button_notifier->connect("main_screen_selected", Callable(this, "_on_main_screen_selected"));
+    button_notifier->connect("editor_tab_changed", Callable(this, "_on_script_tab_changed"));
     steam->connect("lobby_created", Callable(this, "_on_lobby_created"));
     steam->connect("lobby_match_list", Callable(this, "_on_lobby_match_list"));
     steam->connect("lobby_joined", Callable(this, "_on_lobby_joined"));
@@ -80,6 +97,8 @@ void MultiGodot::_process() {
 
     _call_func(this, "_set_mouse_position", {steam_id, Input::get_singleton()->get_mouse_position()});
 
+    _sync_scripts();
+    
     queue_redraw();
 }
 
@@ -192,6 +211,7 @@ void MultiGodot::_read_p2p_packet() {
 
         if (!handshake_completed_with.has(packet_sender)) {
             handshake_completed_with.append(packet_sender);
+            user_data.insert(packet_sender, HashMap<String, Variant>());
         }
 
         // ALWAYS have message value. 
@@ -243,7 +263,7 @@ void MultiGodot::_leave_lobby() {
     }
 }
 
-void MultiGodot::_sync_var(Node *node, StringName property) {
+void MultiGodot::_sync_var(Node *node, StringName property, uint64_t custom_target = 0) {
     NodePath path = editor_node_singleton->get_path_to(node);
     Variant value = editor_node_singleton->get_node(path)->get(property);
     auto send_dictionary = Dictionary({
@@ -252,10 +272,10 @@ void MultiGodot::_sync_var(Node *node, StringName property) {
         KeyValue<Variant, Variant>("property", property),
         KeyValue<Variant, Variant>("value", value),
     });
-    _send_p2p_packet(0, send_dictionary);
+    _send_p2p_packet(custom_target, send_dictionary);
 }
 
-void MultiGodot::_call_func(Node *node, String function_name, Array args) {
+void MultiGodot::_call_func(Node *node, String function_name, Array args, uint64_t custom_target = 0) {
     NodePath path = editor_node_singleton->get_path_to(node);
     auto send_dictionary = Dictionary({
         KeyValue<Variant, Variant>("message", "call_func"),
@@ -263,7 +283,46 @@ void MultiGodot::_call_func(Node *node, String function_name, Array args) {
         KeyValue<Variant, Variant>("function_name", function_name),
         KeyValue<Variant, Variant>("args", args),
     });
-    _send_p2p_packet(0, send_dictionary);
+    _send_p2p_packet(custom_target, send_dictionary);
+}
+
+void MultiGodot::_sync_scripts() {
+    Ref<Script> current_script = script_editor->_get_current_script();
+    RETURN_NULL(current_script);
+    String current_code = current_script->get_source_code();
+
+    if (last_code == current_code) {
+        return;
+    }
+    for (int i = 0; i < handshake_completed_with.size(); i++) {
+        uint64_t this_lobby_member = handshake_completed_with[i];
+            // TODO: NEEDS TO MODIFY TO SYNC BETTER
+        if (!user_data.get(this_lobby_member).has("script_tab_index")) {
+            _call_func(this, "_update_script_different", {current_script->get_path(), current_code});
+        }
+    }
+}
+
+// REMOTE CALLABLES
+
+void MultiGodot::_set_user_data(uint64_t sender, String item, Variant value) {
+    if (unlikely(!user_data.has(sender))) {
+        print_error("A sender somehow isn't in the user_data hashmap.");
+    }
+    user_data.get(sender).insert(item, value);
+}
+
+void MultiGodot::_update_script_different(String path, String remote_code) {
+    Ref<Script> current_script = script_editor->_get_current_script();
+    RETURN_NULL(current_script);
+    if (unlikely(current_script->get_path() == path && (int)user_data.get(steam_id).get("main_screen_status") == SCRIPT_EDITOR)) {
+        print_error("Tried to save a script that was supposedly different from the current one but actually isn't.");
+    }
+    else {
+        FileAccess *file_access = FileAccess::open(path, FileAccess::WRITE).ptr();
+        file_access->store_string(remote_code);
+        script_editor->reload_scripts();
+    }
 }
 
 // SIGNALS
@@ -371,6 +430,22 @@ void MultiGodot::_on_p2p_session_connect_fail(uint64_t this_steam_id, int sessio
     }
 }
 
+void MultiGodot::_on_main_screen_selected(int index) {
+    int tab;
+    switch (index) {
+        case EditorMainScreen::EDITOR_2D: tab = VIEWPORT_2D; break;
+        case EditorMainScreen::EDITOR_3D: tab = VIEWPORT_3D; break;
+        case EditorMainScreen::EDITOR_SCRIPT: tab = SCRIPT_EDITOR; break;
+    };
+    _set_user_data(steam_id, "main_screen_status", index);
+    _call_func(this, "_set_user_data", {steam_id, "main_screen_status", index});
+}
+
+void MultiGodot::_on_script_tab_changed(String path) {
+    _set_user_data(steam_id, "script_tab_index", path);
+    _call_func(this, "_set_user_data", {steam_id, "script_tab_index", path});
+}
+
 // PLUGIN
 
 MultiGodotPlugin::MultiGodotPlugin() {
@@ -378,5 +453,4 @@ MultiGodotPlugin::MultiGodotPlugin() {
     multi_godot->set_name("MultiGodot");
     EditorNode *node = EditorNode::get_singleton();
     node->add_child(multi_godot, true);
-    set_owner(node);
 }

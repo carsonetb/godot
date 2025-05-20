@@ -332,7 +332,6 @@ class ScriptEditor : public PanelContainer {
 	ItemList *help_overview = nullptr;
 	bool help_overview_enabled;
 	VSplitContainer *list_split = nullptr;
-	TabContainer *tab_container = nullptr;
 	EditorFileDialog *file_dialog = nullptr;
 	AcceptDialog *error_dialog = nullptr;
 	ConfirmationDialog *erase_tab_confirm = nullptr;
@@ -523,7 +522,6 @@ class ScriptEditor : public PanelContainer {
 	int file_dialog_option;
 	void _file_dialog_action(const String &p_file);
 
-	Ref<Script> _get_current_script();
 	TypedArray<Script> _get_open_scripts() const;
 
 	HashSet<String> textfile_extensions;
@@ -553,6 +551,10 @@ protected:
 
 public:
 	static ScriptEditor *get_singleton() { return script_editor; }
+
+	// Modified to be public.
+	Ref<Script> _get_current_script();
+	TabContainer *tab_container = nullptr;
 
 	bool toggle_files_panel();
 	bool is_files_panel_toggled();

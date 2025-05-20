@@ -4,6 +4,7 @@ Import('env')
 
 sources = [
     "multi_godot.cpp",
+    "button_notifier.cpp",
     "register_types.cpp",
 ]
 
