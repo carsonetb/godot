@@ -6,8 +6,8 @@
 #include "scene/gui/tab_container.h"
 
 void ButtonNotifier::_bind_methods() {
-    INIT_SIGNAL("main_screen_selected", Variant::INT);
-    INIT_SIGNAL("script_tab_changed", Variant::STRING);
+    ADD_SIGNAL(MethodInfo("editor_tab_changed", PropertyInfo(Variant::INT, "new_tab_index")));
+    ADD_SIGNAL(MethodInfo("current_script_path_changed", PropertyInfo(Variant::STRING, "new_path")));
 }
 
 void ButtonNotifier::_notification(int what) {
@@ -20,15 +20,22 @@ void ButtonNotifier::_notification(int what) {
 void ButtonNotifier::_ready() {
     set_process_internal(true);
 
-    INIT("main_screen_selected", EditorNode::get_editor_main_screen()->get_selected_index());
-    if (ScriptEditor::get_singleton()->_get_current_script() != nullptr) {
-        INIT("script_tab_changed", ScriptEditor::get_singleton()->_get_current_script()->get_path());
-    }
+    previous_values.insert("editor_tab", EditorNode::get_editor_main_screen()->get_selected_index());
+    previous_values.insert("current_script_path", "");
 }
 
 void ButtonNotifier::_process() {
-    DIFFPREV(EditorNode::get_editor_main_screen()->get_selected_index(), "main_screen_selected", int);
+    int index = EditorNode::get_editor_main_screen()->get_selected_index();
+    if (index != (int)previous_values.get("editor_tab")) {
+        previous_values.insert("editor_tab", index);
+        emit_signal("editor_tab_changed", index);
+    }
+
     if (ScriptEditor::get_singleton()->_get_current_script() != nullptr) {
-        DIFFPREV(ScriptEditor::get_singleton()->_get_current_script()->get_path(), "script_tab_changed", String);
+        String path = ScriptEditor::get_singleton()->_get_current_script()->get_path();
+        if (path != (String)previous_values.get("current_script_path")) {
+            previous_values.insert("current_script_path", path);
+            emit_signal("current_script_path_changed", path);
+        }
     }
 }

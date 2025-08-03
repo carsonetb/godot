@@ -13,10 +13,6 @@ class MultiGodot : public Node2D {
     GDCLASS(MultiGodot, Node2D);
 
     protected:
-        #define RETURN_NULL(item) \
-            if (item == nullptr) { return; }
-        // RETURN_NULL
-
         enum RemoteMainScreenStatus {
             VIEWPORT_2D,
             VIEWPORT_3D,
@@ -151,7 +147,7 @@ class MultiGodot : public Node2D {
 
         // REMOTE CALLABLES
 
-        void _set_mouse_position(uint64_t sender, Vector2 pos) {mouse_positions.insert(sender, pos);}
+        void _set_mouse_position(uint64_t sender, Vector2 pos);
         void _set_user_data(uint64_t sender, String item, Variant value);
         void _update_script_different(String path, String code);
 
@@ -163,8 +159,8 @@ class MultiGodot : public Node2D {
         void _on_lobby_chat_update(uint64_t this_lobby_id, uint64_t change_id, uint64_t making_change_id, int chat_state);
         void _on_p2p_session_request(uint64_t remote_id);
         void _on_p2p_session_connect_fail(uint64_t this_steam_id, int session_error);
-        void _on_main_screen_selected(int index);
-        void _on_script_tab_changed(String path);
+        void _on_editor_tab_changed(int index);
+        void _on_current_script_path_changed(String path);
     
     public:
         MultiGodot();
