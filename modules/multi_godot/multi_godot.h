@@ -102,6 +102,7 @@ class MultiGodot : public Node2D {
         static const bool VERBOSE_DEBUG = true;
         static const P2PSend SEND_TYPE = P2P_SEND_UNRELIABLE;
         static const int DEFAULT_CHANNEL = 0;
+        static const int PACKET_SIZE_LIMIT = 1200; // bytes
 
         // NODES
 
@@ -132,6 +133,7 @@ class MultiGodot : public Node2D {
         void _draw();
 
         // METHODS
+
         void _create_lobby();
         void _join_lobby(uint64_t this_lobby_id);
         void _get_lobby_members();
@@ -144,12 +146,17 @@ class MultiGodot : public Node2D {
         void _sync_var(Node *node, StringName property, uint64_t custom_target = 0);
         void _call_func(Node *node, String function_name, Array args, uint64_t custom_target = 0);
         void _sync_scripts();
+        void _sync_filesystem();
+        Vector<String> _get_file_path_list(String path, String localized_path);
 
         // REMOTE CALLABLES
 
         void _set_mouse_position(uint64_t sender, Vector2 pos);
         void _set_user_data(uint64_t sender, String item, Variant value);
         void _update_script_different(String path, String code);
+        void _compare_filesystem(Vector<String> path_list, uint64_t host_id);
+        void _request_file_contents(uint64_t client_id);
+        void _receive_file_contents(String path, String contents);
 
         // SIGNALS
 

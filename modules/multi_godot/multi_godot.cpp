@@ -1,5 +1,6 @@
 #include "multi_godot.h"
 
+#include "core/io/dir_access.h"
 #include "core/object/script_language.h"
 #include "core/variant/variant_utility.h"
 #include "editor/editor_main_screen.h"
@@ -12,15 +13,24 @@
 MultiGodot::MultiGodot() {}
 
 void MultiGodot::_bind_methods() {
+
+    // Signals
+
     ClassDB::bind_method(D_METHOD("_on_lobby_created", "connect", "this_lobby_id"), &MultiGodot::_on_lobby_created);
     ClassDB::bind_method(D_METHOD("_on_lobby_match_list", "these_lobbies"), &MultiGodot::_on_lobby_match_list);
     ClassDB::bind_method(D_METHOD("_on_lobby_joined", "this_lobby_id", "_permissions", "_locked", "response"), &MultiGodot::_on_lobby_joined);
     ClassDB::bind_method(D_METHOD("_on_lobby_chat_update", "this_lobby_id", "change_id", "making_change_id", "chat_state"), &MultiGodot::_on_lobby_chat_update);
     ClassDB::bind_method(D_METHOD("_on_p2p_session_request", "remote_id"), &MultiGodot::_on_p2p_session_request);
     ClassDB::bind_method(D_METHOD("_on_p2p_session_connect_fail", "steam_id", "session_error"), &MultiGodot::_on_p2p_session_connect_fail);
+
+    // Remote Callables
+
     ClassDB::bind_method(D_METHOD("_set_mouse_position", "sender", "position"), &MultiGodot::_set_mouse_position);
     ClassDB::bind_method(D_METHOD("_set_user_data", "sender", "item", "data"), &MultiGodot::_set_user_data);
     ClassDB::bind_method(D_METHOD("_update_script_different", "path", "remote_code"), &MultiGodot::_update_script_different);
+    ClassDB::bind_method(D_METHOD("_compare_filesystem", "other_path_list", "host_id"), &MultiGodot::_compare_filesystem);
+    ClassDB::bind_method(D_METHOD("_request_file_contents", "client_id"), &MultiGodot::_request_file_contents);
+    ClassDB::bind_method(D_METHOD("_receive_file_contents", "path", "contents"), &MultiGodot::_receive_file_contents);
 
     // Button signals
 
@@ -220,8 +230,12 @@ void MultiGodot::_read_p2p_packet() {
             if (VERBOSE_DEBUG) {
                 print_line("Handshake completed with:");
                 print_line(packet_sender);
+                if (is_lobby_owner) {
+                    _sync_filesystem();
+                }
             }
         }
+
         if (message == "sync_var") {
             NodePath path = readable_data["path"];
             StringName property = readable_data["property"];
@@ -232,6 +246,7 @@ void MultiGodot::_read_p2p_packet() {
             }
             node->set(property, value);
         }
+
         if (message == "call_func") {
             NodePath path = readable_data["path"];
             String function_name = readable_data["function_name"];
@@ -310,6 +325,41 @@ void MultiGodot::_sync_scripts() {
     }
 }
 
+void MultiGodot::_sync_filesystem() {
+    String project_path = ProjectSettings::get_singleton()->get_resource_path();
+    Vector<String> path_list = _get_file_path_list(project_path, "res:/");
+    _call_func(this, "_compare_filesystem", {path_list, steam_id});
+}
+
+Vector<String> MultiGodot::_get_file_path_list(String path, String localized_path) {
+    Vector<String> files;
+
+    Ref<DirAccess> dir = DirAccess::open(path);
+    if (!dir.is_valid()) {
+        return files;
+    }
+
+    dir->list_dir_begin();
+
+    String file_name;
+    while (true) {
+        file_name = dir->get_next();
+        if (file_name == "") break;
+        if (file_name == "." || file_name == ".." || file_name == ".godot") continue;
+
+        String file_path = path + "/" + file_name;
+        String localized_file_path = localized_path + "/" + file_name;
+        if (dir->current_is_dir()) {
+            files.append_array(_get_file_path_list(file_path, localized_file_path));
+        }
+        else {
+            files.append(localized_file_path);
+        }
+    }
+
+    return files;
+}
+
 // REMOTE CALLABLES
 
 void MultiGodot::_set_mouse_position(uint64_t sender, Vector2 pos) { 
@@ -341,6 +391,104 @@ void MultiGodot::_update_script_different(String path, String remote_code) {
         script_editor->reload_scripts();
     }
 }
+
+void MultiGodot::_compare_filesystem(Vector<String> other_path_list, uint64_t host_id) {
+    String project_path = ProjectSettings::get_singleton()->get_resource_path();
+    Vector<String> this_path_list = _get_file_path_list(project_path, "res:/");
+
+    Vector<String> missing_files;
+    Vector<String> excess_files;
+
+    // Start by comparing theirs to ours, to see if we have any missing files.
+    for (int i = 0; i < other_path_list.size(); i++) {
+        String path = other_path_list[i];
+        if (this_path_list.has(path)) {
+            continue;
+        }
+
+        missing_files.append(path);
+    }
+
+    // Now compare ours to theirs, to see if we have any excess files.
+    for (int i = 0; i < this_path_list.size(); i++) {
+        String path = this_path_list[i];
+        if (other_path_list.has(path)) {
+            continue;
+        }
+
+        excess_files.append(path);
+    }
+
+    // Add in missing files, which are empty and will be filled later.
+    for (int i = 0; i < missing_files.size(); i++) {
+        String path = missing_files[i];
+        Ref<FileAccess> file = FileAccess::open(path, FileAccess::WRITE);
+        file->close();
+        this_path_list.append(path);
+    }
+
+    // Remove excess files.
+    for (int i = 0; i < excess_files.size(); i++) {
+        String path = excess_files[i];
+        Ref<DirAccess> dir = DirAccess::create(DirAccess::ACCESS_FILESYSTEM);
+        
+        if (dir->file_exists(path)) {
+            Error error = dir->remove(path);
+            if (error != OK) {
+                print_error("Error while deleting file with path " + path + ". Code: " + error);
+            }
+        }
+        else {
+            print_error("While removing an excess file, somehow the file with path " + path + " no longer exists.");
+        }
+
+        this_path_list.remove_at(this_path_list.find(path));
+    }
+
+    print_line("Debug: Printing our file path list.");
+    for (int i = 0; i < this_path_list.size(); i++) {
+        print_line(this_path_list[i]);
+    }
+    print_line("Debug: Printing remote file path list.");
+    for (int i = 0; i < other_path_list.size(); i++) {
+        print_line(other_path_list[i]);
+    }
+
+    // Requiest individual file contents from the host.
+    _call_func(this, "_request_file_contents", {steam_id}, host_id);
+}
+
+void MultiGodot::_request_file_contents(uint64_t client_id) {
+    if (!is_lobby_owner) {
+        print_error("Request to get file contents to a non-host.");
+        return;
+    }
+
+    String project_path = ProjectSettings::get_singleton()->get_resource_path();
+    Vector<String> path_list = _get_file_path_list(project_path, "res:/");
+
+    for (int i = 0; i < path_list.size(); i++) {
+        String path = path_list[i];
+        Ref<FileAccess> file = FileAccess::open(path, FileAccess::READ);
+        int64_t size = FileAccess::get_size(path);
+
+        // File can be sent as an individual packet.
+        if (size < PACKET_SIZE_LIMIT) {
+            String file_contents = file->get_as_text();
+            _call_func(this, "_receive_file_contents", {path, file_contents}, client_id);
+        }
+        else {
+            print_error("File size is greater than packet limit for path " + path);
+        }
+    }
+}
+
+void MultiGodot::_receive_file_contents(String path, String contents) {
+    print_line("Received updated file contents for path " + path);
+    Ref<FileAccess> file = FileAccess::open(path, FileAccess::WRITE);
+    file->store_string(contents);
+}
+
 
 // SIGNALS
 
@@ -431,10 +579,10 @@ void MultiGodot::_on_p2p_session_request(uint64_t remote_id) {
 
     steam->acceptP2PSessionWithUser(remote_id);
 
-    _make_p2p_handshake();
     _get_lobby_members();
+    _make_p2p_handshake();
 }
-
+ 
 void MultiGodot::_on_p2p_session_connect_fail(uint64_t this_steam_id, int session_error) {
     switch (session_error) {
         case 0: print_line("WARNING: Session failure: no error given (task failed successfully!)"); break;
