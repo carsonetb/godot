@@ -121,6 +121,7 @@ void MultiGodot::_process() {
     _call_func(this, "_set_mouse_position", {steam_id, Input::get_singleton()->get_mouse_position()});
 
     _sync_created_deleted_files();
+    _sync_scripts();
     
     queue_redraw();
 }
@@ -415,7 +416,10 @@ void MultiGodot::_sync_scripts() {
     for (int i = 0; i < handshake_completed_with.size(); i++) {
         uint64_t this_lobby_member = handshake_completed_with[i];
         HashMap<String, Variant> member_info = user_data.get(this_lobby_member);
-        if (!member_info.has("current_script_path") || member_info.get("current_script_path") != (Variant)path) {
+        if (!member_info.has("current_script_path") || !member_info.has("editor_tab_index")) {
+            print_error("Trying to sync a script with a client but they are missing info: either current_script_path or editor_tab_index.");
+        }
+        if ((int)member_info.get("editor_tab_index") != SCRIPT_EDITOR || member_info.get("current_script_path") != (Variant)path) {
             _call_func(this, "_update_script_different", {path, current_code});
         }
         else {
@@ -492,12 +496,16 @@ void MultiGodot::_update_script_different(String path, String remote_code) {
     if (current_script == nullptr) {
         return;
     }
-    if (unlikely(current_script->get_path() == path && (int)user_data.get(steam_id).get("editor_tab_index") == SCRIPT_EDITOR)) {
+    HashMap<String, Variant> this_data = user_data.get(steam_id);
+    if (!this_data.has("editor_tab_index")) {
+        print_error("Missing data required to know if _update_script_different call is valid: editor_tab_index");
+    }
+    else if (unlikely(current_script->get_path() == path && (int)this_data.get("editor_tab_index") == SCRIPT_EDITOR)) {
         print_error("Tried to save a script that was supposedly different from the current one but actually isn't.");
     }
     else {
-        FileAccess *file_access = FileAccess::open(path, FileAccess::WRITE).ptr();
-        file_access->store_string(remote_code);
+        Ref<FileAccess> file = FileAccess::open(path, FileAccess::WRITE);
+        file->store_string(remote_code);
         script_editor->reload_scripts();
     }
 }
@@ -745,7 +753,7 @@ void MultiGodot::_on_editor_tab_changed(int index) {
         case EditorMainScreen::EDITOR_SCRIPT: tab = SCRIPT_EDITOR; break;
     };
     _set_user_data(steam_id, "editor_tab_index", tab);
-    _call_func(this, "_set_user_data", {steam_id, "main_screen_status", tab});
+    _call_func(this, "_set_user_data", {steam_id, "editor_tab_index", tab});
 }
 
 void MultiGodot::_on_current_script_path_changed(String path) {
