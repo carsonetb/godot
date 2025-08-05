@@ -138,6 +138,7 @@ class MultiGodot : public Node2D {
         void _notification(int what);
         void _ready();
         void _process();
+        void _exit_tree();
         void _draw();
 
         // METHODS

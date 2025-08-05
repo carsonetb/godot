@@ -53,6 +53,9 @@ void MultiGodot::_notification(int what) {
     if (what == NOTIFICATION_INTERNAL_PROCESS) {
         _process();
     }
+    if (what == NOTIFICATION_EXIT_TREE) {
+        _exit_tree();
+    }
     if (what == NOTIFICATION_DRAW) {
         _draw();
     }
@@ -108,6 +111,8 @@ void MultiGodot::_ready() {
 }
 
 void MultiGodot::_process() {
+    steam->run_callbacks();
+
     if (lobby_id > 0) {
         _read_all_p2p_packets(0);
     }
@@ -117,6 +122,12 @@ void MultiGodot::_process() {
     _sync_created_deleted_files();
     
     queue_redraw();
+}
+
+void MultiGodot::_exit_tree() {
+    stop_filesystem_scanner = true;
+    filesystem_scanner.wait_to_finish();
+    steam->leaveLobby(lobby_id);
 }
 
 void MultiGodot::_draw() {
