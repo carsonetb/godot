@@ -157,7 +157,7 @@ class MultiGodot : public Node2D {
         void _call_func(Node *node, String function_name, Array args, uint64_t custom_target = 0);
         void _sync_scripts();
         void _sync_filesystem();
-        void _sync_new_deleted_files();
+        void _sync_created_deleted_files();
 
         // REMOTE CALLABLES
 

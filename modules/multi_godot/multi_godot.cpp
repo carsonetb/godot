@@ -114,7 +114,7 @@ void MultiGodot::_process() {
 
     _call_func(this, "_set_mouse_position", {steam_id, Input::get_singleton()->get_mouse_position()});
 
-    _sync_new_deleted_files();
+    _sync_created_deleted_files();
     
     queue_redraw();
 }
@@ -150,7 +150,6 @@ void MultiGodot::_threaded_filesystem_scanner(void *p_userdata) {
         Vector<String> new_files;
         Vector<String> deleted_files;
 
-        String project_path = ProjectSettings::get_singleton()->get_resource_path();
         Vector<String> file_list = _get_file_path_list(project_path);
 
         // Check for new files.
@@ -419,14 +418,20 @@ void MultiGodot::_sync_filesystem() {
     _call_func(this, "_compare_filesystem", {path_list, steam_id});
 }
 
-void MultiGodot::_sync_new_deleted_files() {
+void MultiGodot::_sync_created_deleted_files() {
     mutex.lock();
     Vector<String> created = new_files;
     Vector<String> deleted = deleted_files;
+    new_files = {};
+    deleted_files = {};
     mutex.unlock();
 
     for (int i = 0; i < created.size(); i++) {
         String path = created[i];
+        if (deleted.has(path)) {
+            continue;
+        }
+        print_line(path);
         Ref<FileAccess> file = FileAccess::open(path, FileAccess::READ);
         _call_func(this, "_receive_file_contents", {path, file->get_as_text()});
         file->close();
@@ -434,6 +439,9 @@ void MultiGodot::_sync_new_deleted_files() {
 
     for (int i = 0; i < deleted.size(); i++) {
         String path = deleted[i];
+        if (created.has(path)) {
+            continue;
+        }
         _call_func(this, "_delete_file", {path});
     }
 }
@@ -628,6 +636,8 @@ void MultiGodot::_on_lobby_match_list(Array these_lobbies) {
 }
 
 void MultiGodot::_on_lobby_joined(uint64_t this_lobby_id, int _permissions, bool _locked, int response) {
+    print_line("This client joined a lobby.");
+
     if (response == CHAT_ROOM_ENTER_RESPONSE_SUCCESS) {
         lobby_id = this_lobby_id;
 
