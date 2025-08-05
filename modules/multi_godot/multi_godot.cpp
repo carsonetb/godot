@@ -1,8 +1,12 @@
 #include "multi_godot.h"
 
 #include "core/io/dir_access.h"
+#include "core/os/mutex.h"
+#include "core/os/thread.h"
 #include "core/object/script_language.h"
 #include "core/variant/variant_utility.h"
+#include "editor/editor_file_system.h"
+#include "editor/editor_interface.h"
 #include "editor/editor_main_screen.h"
 #include "editor/plugins/script_editor_plugin.h"
 #include "modules/godotsteam/godotsteam.h"
@@ -31,6 +35,7 @@ void MultiGodot::_bind_methods() {
     ClassDB::bind_method(D_METHOD("_compare_filesystem", "other_path_list", "host_id"), &MultiGodot::_compare_filesystem);
     ClassDB::bind_method(D_METHOD("_request_file_contents", "client_id"), &MultiGodot::_request_file_contents);
     ClassDB::bind_method(D_METHOD("_receive_file_contents", "path", "contents"), &MultiGodot::_receive_file_contents);
+    ClassDB::bind_method(D_METHOD("_delete_file", "path"), &MultiGodot::_delete_file);
 
     // Button signals
 
@@ -88,6 +93,8 @@ void MultiGodot::_ready() {
         print_line("Project name: " + this_project_name);
     }
 
+    filesystem_scanner.start(_threaded_filesystem_scanner, this);
+
     button_notifier->connect("editor_tab_changed", Callable(this, "_on_editor_tab_changed"));
     button_notifier->connect("current_script_path_changed", Callable(this, "_on_current_script_path_changed"));
     steam->connect("lobby_created", Callable(this, "_on_lobby_created"));
@@ -107,7 +114,7 @@ void MultiGodot::_process() {
 
     _call_func(this, "_set_mouse_position", {steam_id, Input::get_singleton()->get_mouse_position()});
 
-    _sync_scripts();
+    _sync_new_deleted_files();
     
     queue_redraw();
 }
@@ -124,6 +131,87 @@ void MultiGodot::_draw() {
 }
 
 // METHODS
+
+void MultiGodot::_threaded_filesystem_scanner(void *p_userdata) {
+    MultiGodot *this_object = (MultiGodot *)p_userdata;
+
+    String project_path = ProjectSettings::get_singleton()->get_resource_path();
+    Vector<String> old_file_list = _get_file_path_list(project_path);
+
+    while (true) {
+        this_object->mutex.lock();
+        bool stop_filesystem_scanner = this_object->stop_filesystem_scanner;
+        this_object->mutex.unlock();
+
+        if (stop_filesystem_scanner) {
+            return;
+        }
+
+        Vector<String> new_files;
+        Vector<String> deleted_files;
+
+        String project_path = ProjectSettings::get_singleton()->get_resource_path();
+        Vector<String> file_list = _get_file_path_list(project_path);
+
+        // Check for new files.
+        for (int i = 0; i < file_list.size(); i++) {
+            String path = file_list[i];
+            if (path.to_lower().ends_with("tmp") || path.to_lower().ends_with("ini")) {
+                continue;
+            }
+            if (!old_file_list.has(path)) {
+                new_files.append(path);
+            }
+        }
+
+        // Check for old files.
+        for (int i = 0; i < old_file_list.size(); i++) {
+            String path = old_file_list[i];
+            if (path.to_lower().ends_with("tmp") || path.to_lower().ends_with("ini")) {
+                continue;
+            }
+            if (!file_list.has(path)) {
+                deleted_files.append(path);
+            }
+        }
+
+        old_file_list = file_list;
+
+        this_object->mutex.lock();
+        this_object->new_files.append_array(new_files);
+        this_object->deleted_files.append_array(deleted_files);
+        this_object->mutex.unlock();
+    }
+}
+
+Vector<String> MultiGodot::_get_file_path_list(String path, String localized_path) {
+    Vector<String> files;
+
+    Ref<DirAccess> dir = DirAccess::open(path);
+    if (!dir.is_valid()) {
+        return files;
+    }
+
+    dir->list_dir_begin();
+
+    String file_name;
+    while (true) {
+        file_name = dir->get_next();
+        if (file_name == "") break;
+        if (file_name == "." || file_name == ".." || file_name == ".godot") continue;
+
+        String file_path = path + "/" + file_name;
+        String localized_file_path = localized_path + "/" + file_name;
+        if (dir->current_is_dir()) {
+            files.append_array(_get_file_path_list(file_path, localized_file_path));
+        }
+        else {
+            files.append(localized_file_path);
+        }
+    }
+
+    return files;
+}
 
 void MultiGodot::_create_lobby() {
     if (lobby_id == 0) {
@@ -331,33 +419,23 @@ void MultiGodot::_sync_filesystem() {
     _call_func(this, "_compare_filesystem", {path_list, steam_id});
 }
 
-Vector<String> MultiGodot::_get_file_path_list(String path, String localized_path) {
-    Vector<String> files;
+void MultiGodot::_sync_new_deleted_files() {
+    mutex.lock();
+    Vector<String> created = new_files;
+    Vector<String> deleted = deleted_files;
+    mutex.unlock();
 
-    Ref<DirAccess> dir = DirAccess::open(path);
-    if (!dir.is_valid()) {
-        return files;
+    for (int i = 0; i < created.size(); i++) {
+        String path = created[i];
+        Ref<FileAccess> file = FileAccess::open(path, FileAccess::READ);
+        _call_func(this, "_receive_file_contents", {path, file->get_as_text()});
+        file->close();
     }
 
-    dir->list_dir_begin();
-
-    String file_name;
-    while (true) {
-        file_name = dir->get_next();
-        if (file_name == "") break;
-        if (file_name == "." || file_name == ".." || file_name == ".godot") continue;
-
-        String file_path = path + "/" + file_name;
-        String localized_file_path = localized_path + "/" + file_name;
-        if (dir->current_is_dir()) {
-            files.append_array(_get_file_path_list(file_path, localized_file_path));
-        }
-        else {
-            files.append(localized_file_path);
-        }
+    for (int i = 0; i < deleted.size(); i++) {
+        String path = deleted[i];
+        _call_func(this, "_delete_file", {path});
     }
-
-    return files;
 }
 
 // REMOTE CALLABLES
@@ -393,6 +471,8 @@ void MultiGodot::_update_script_different(String path, String remote_code) {
 }
 
 void MultiGodot::_compare_filesystem(Vector<String> other_path_list, uint64_t host_id) {
+    print_line("The host requested to compare and syncronize filesystems.");
+
     String project_path = ProjectSettings::get_singleton()->get_resource_path();
     Vector<String> this_path_list = _get_file_path_list(project_path, "res:/");
 
@@ -463,6 +543,9 @@ void MultiGodot::_request_file_contents(uint64_t client_id) {
         print_error("Request to get file contents to a non-host.");
         return;
     }
+    else {
+        print_line("A client requested all file contents.");
+    }
 
     String project_path = ProjectSettings::get_singleton()->get_resource_path();
     Vector<String> path_list = _get_file_path_list(project_path, "res:/");
@@ -489,6 +572,21 @@ void MultiGodot::_receive_file_contents(String path, String contents) {
     file->store_string(contents);
 }
 
+void MultiGodot::_delete_file(String path) {
+    print_line("Remote request to delete file at path " + path);
+
+    Ref<DirAccess> dir = DirAccess::create(DirAccess::ACCESS_FILESYSTEM);
+    
+    if (dir->file_exists(path)) {
+        Error error = dir->remove(path);
+        if (error != OK) {
+            print_error("Error while deleting file with path " + path + ". Code: " + error);
+        }
+    }
+    else {
+        print_error("While removing an excess file, somehow the file with path " + path + " no longer exists.");
+    }
+}
 
 // SIGNALS
 

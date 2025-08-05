@@ -99,10 +99,10 @@ class MultiGodot : public Node2D {
 
         static const int PACKET_READ_LIMIT = 32;
         static const int MAX_MEMBERS = 4; // Possibly increase this in the future if there is a need.
-        static const bool VERBOSE_DEBUG = true;
-        static const P2PSend SEND_TYPE = P2P_SEND_UNRELIABLE;
         static const int DEFAULT_CHANNEL = 0;
         static const int PACKET_SIZE_LIMIT = 1200; // bytes
+        static const bool VERBOSE_DEBUG = true;
+        static const P2PSend SEND_TYPE = P2P_SEND_UNRELIABLE;
 
         // NODES
 
@@ -111,15 +111,23 @@ class MultiGodot : public Node2D {
         ScriptEditor *script_editor;
         EditorNode *editor_node_singleton;
 
+        // PROPERTIES
+
         uint64_t lobby_id = 0;
         uint64_t steam_id = 0;
         bool is_lobby_owner = false;
-        String this_project_name;
-        Vector<HashMap<String, Variant>> lobby_members;
         bool printed = false;
+        bool stop_filesystem_scanner = false;
+        String this_project_name;
         String last_code;
+        Vector<HashMap<String, Variant>> lobby_members;
+        Vector<String> new_files;
+        Vector<String> deleted_files; // Both this and new_files will fill up if not cleaned up by the main thread.
+        Thread filesystem_scanner;
+        Mutex mutex;
 
-        // Remote properties
+        // REMOTE PROPERTIES
+
         HashMap<uint64_t, Vector2> mouse_positions;
         HashMap<uint64_t, HashMap<String, Variant>> user_data;
         Vector<uint64_t> handshake_completed_with;
@@ -134,6 +142,8 @@ class MultiGodot : public Node2D {
 
         // METHODS
 
+        static void _threaded_filesystem_scanner(void* p_userdata);
+        static Vector<String> _get_file_path_list(String path, String localized_path = "res:/");
         void _create_lobby();
         void _join_lobby(uint64_t this_lobby_id);
         void _get_lobby_members();
@@ -147,7 +157,7 @@ class MultiGodot : public Node2D {
         void _call_func(Node *node, String function_name, Array args, uint64_t custom_target = 0);
         void _sync_scripts();
         void _sync_filesystem();
-        Vector<String> _get_file_path_list(String path, String localized_path);
+        void _sync_new_deleted_files();
 
         // REMOTE CALLABLES
 
@@ -157,6 +167,7 @@ class MultiGodot : public Node2D {
         void _compare_filesystem(Vector<String> path_list, uint64_t host_id);
         void _request_file_contents(uint64_t client_id);
         void _receive_file_contents(String path, String contents);
+        void _delete_file(String path);
 
         // SIGNALS
 
