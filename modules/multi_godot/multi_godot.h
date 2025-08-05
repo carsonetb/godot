@@ -169,6 +169,7 @@ class MultiGodot : public Node2D {
         void _request_file_contents(uint64_t client_id);
         void _receive_file_contents(String path, String contents);
         void _delete_file(String path);
+        void _rename_file(String from, String to);
 
         // SIGNALS
 

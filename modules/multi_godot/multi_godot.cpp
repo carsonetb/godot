@@ -36,6 +36,7 @@ void MultiGodot::_bind_methods() {
     ClassDB::bind_method(D_METHOD("_request_file_contents", "client_id"), &MultiGodot::_request_file_contents);
     ClassDB::bind_method(D_METHOD("_receive_file_contents", "path", "contents"), &MultiGodot::_receive_file_contents);
     ClassDB::bind_method(D_METHOD("_delete_file", "path"), &MultiGodot::_delete_file);
+    ClassDB::bind_method(D_METHOD("_rename_file", "from", "to"), &MultiGodot::_rename_file);
 
     // Button signals
 
@@ -437,12 +438,21 @@ void MultiGodot::_sync_created_deleted_files() {
     deleted_files = {};
     mutex.unlock();
 
+    if (created.size() > 0 && deleted.size() > 0) {
+        if (VERBOSE_DEBUG) {
+            print_line("File with path " + deleted[0] + " was renamed to file with path " + created[0]);
+        }
+        _call_func(this, "_rename_file", {deleted[0], created[0]});
+    }
+
     for (int i = 0; i < created.size(); i++) {
         String path = created[i];
         if (deleted.has(path)) {
             continue;
         }
-        print_line(path);
+        if (VERBOSE_DEBUG) {
+            print_line("New file created: " + path);
+        }
         Ref<FileAccess> file = FileAccess::open(path, FileAccess::READ);
         _call_func(this, "_receive_file_contents", {path, file->get_as_text()});
         file->close();
@@ -452,6 +462,9 @@ void MultiGodot::_sync_created_deleted_files() {
         String path = deleted[i];
         if (created.has(path)) {
             continue;
+        }
+        if (VERBOSE_DEBUG) {
+            print_line("File deleted: " + path);
         }
         _call_func(this, "_delete_file", {path});
     }
@@ -609,6 +622,12 @@ void MultiGodot::_delete_file(String path) {
     else {
         print_error("While deleting a file as requested by the host, somehow the file with path " + path + " no longer exists.");
     }
+}
+
+void MultiGodot::_rename_file(String from, String to) {
+    Ref<DirAccess> dir = DirAccess::create(DirAccess::ACCESS_RESOURCES);
+    dir->rename(from, to);
+    EditorInterface::get_singleton()->get_resource_file_system()->scan();
 }
 
 // SIGNALS
