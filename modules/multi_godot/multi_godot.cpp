@@ -518,7 +518,7 @@ void MultiGodot::_compare_filesystem(Vector<String> other_path_list, uint64_t ho
     // Remove excess files.
     for (int i = 0; i < excess_files.size(); i++) {
         String path = excess_files[i];
-        Ref<DirAccess> dir = DirAccess::create(DirAccess::ACCESS_FILESYSTEM);
+        Ref<DirAccess> dir = DirAccess::create(DirAccess::ACCESS_RESOURCES);
         
         if (dir->file_exists(path)) {
             Error error = dir->remove(path);
@@ -578,21 +578,25 @@ void MultiGodot::_receive_file_contents(String path, String contents) {
     print_line("Received updated file contents for path " + path);
     Ref<FileAccess> file = FileAccess::open(path, FileAccess::WRITE);
     file->store_string(contents);
+    EditorInterface::get_singleton()->get_resource_file_system()->scan();
 }
 
 void MultiGodot::_delete_file(String path) {
     print_line("Remote request to delete file at path " + path);
 
-    Ref<DirAccess> dir = DirAccess::create(DirAccess::ACCESS_FILESYSTEM);
+    Ref<DirAccess> dir = DirAccess::create(DirAccess::ACCESS_RESOURCES);
     
     if (dir->file_exists(path)) {
         Error error = dir->remove(path);
         if (error != OK) {
             print_error("Error while deleting file with path " + path + ". Code: " + error);
         }
+        else {
+            EditorInterface::get_singleton()->get_resource_file_system()->scan();
+        }
     }
     else {
-        print_error("While removing an excess file, somehow the file with path " + path + " no longer exists.");
+        print_error("While deleting a file as requested by the host, somehow the file with path " + path + " no longer exists.");
     }
 }
 
