@@ -113,6 +113,7 @@ class MultiGodot : public Node2D {
 
         // PROPERTIES
 
+        int script_editor_previous_line = 0;
         uint64_t lobby_id = 0;
         uint64_t steam_id = 0;
         bool is_lobby_owner = false;
@@ -120,6 +121,7 @@ class MultiGodot : public Node2D {
         bool stop_filesystem_scanner = false;
         String this_project_name;
         String last_code;
+        String script_editor_previous_line_text;
         Vector<HashMap<String, Variant>> lobby_members;
         Vector<String> new_files;
         Vector<String> deleted_files; // Both this and new_files will fill up if not cleaned up by the main thread.
@@ -148,6 +150,7 @@ class MultiGodot : public Node2D {
         static Dictionary _hashmap_to_dictionary(HashMap<String, Variant> map);
         static HashMap<String, Variant> _dictionary_to_hashmap(Dictionary dict);
         static Vector<String> _get_file_path_list(String path, String localized_path = "res:/");
+        static CodeEdit *get_code_edit();
         void _create_lobby();
         void _join_lobby(uint64_t this_lobby_id);
         void _get_lobby_members();
@@ -160,6 +163,7 @@ class MultiGodot : public Node2D {
         void _sync_var(Node *node, StringName property, uint64_t custom_target = 0);
         void _call_func(Node *node, String function_name, Array args, uint64_t custom_target = 0);
         void _sync_scripts();
+        void _sync_live_edits();
         void _sync_filesystem();
         void _sync_created_deleted_files();
 
@@ -168,6 +172,7 @@ class MultiGodot : public Node2D {
         void _set_mouse_position(uint64_t sender, Vector2 pos);
         void _set_user_data(uint64_t sender, String item, Variant value);
         void _update_script_different(String path, String code);
+        void _update_script_same(int line, String line_text);
         void _compare_filesystem(Vector<String> path_list, uint64_t host_id);
         void _request_file_contents(uint64_t client_id);
         void _receive_file_contents(String path, String contents);

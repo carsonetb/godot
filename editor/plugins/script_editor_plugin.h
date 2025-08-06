@@ -451,7 +451,6 @@ class ScriptEditor : public PanelContainer {
 	void _clear_breakpoints();
 	Array _get_cached_breakpoints_for_script(const String &p_path) const;
 
-	ScriptEditorBase *_get_current_editor() const;
 	TypedArray<ScriptEditorBase> _get_open_script_editors() const;
 
 	Ref<ConfigFile> script_editor_cache;
@@ -565,6 +564,8 @@ public:
 	Ref<Resource> open_file(const String &p_file);
 
 	void ensure_select_current();
+	
+	ScriptEditorBase *_get_current_editor() const;
 
 	bool is_editor_floating();
 

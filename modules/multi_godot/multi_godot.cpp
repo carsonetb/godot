@@ -5,6 +5,7 @@
 #include "core/os/thread.h"
 #include "core/object/script_language.h"
 #include "core/variant/variant_utility.h"
+#include "editor/code_editor.h"
 #include "editor/editor_file_system.h"
 #include "editor/editor_interface.h"
 #include "editor/editor_main_screen.h"
@@ -32,6 +33,7 @@ void MultiGodot::_bind_methods() {
     ClassDB::bind_method(D_METHOD("_set_mouse_position", "sender", "position"), &MultiGodot::_set_mouse_position);
     ClassDB::bind_method(D_METHOD("_set_user_data", "sender", "item", "data"), &MultiGodot::_set_user_data);
     ClassDB::bind_method(D_METHOD("_update_script_different", "path", "remote_code"), &MultiGodot::_update_script_different);
+    ClassDB::bind_method(D_METHOD("_update_script_same", "line", "line_text"), &MultiGodot::_update_script_same);
     ClassDB::bind_method(D_METHOD("_compare_filesystem", "other_path_list", "host_id"), &MultiGodot::_compare_filesystem);
     ClassDB::bind_method(D_METHOD("_request_file_contents", "client_id"), &MultiGodot::_request_file_contents);
     ClassDB::bind_method(D_METHOD("_receive_file_contents", "path", "contents"), &MultiGodot::_receive_file_contents);
@@ -252,6 +254,16 @@ Vector<String> MultiGodot::_get_file_path_list(String path, String localized_pat
     return files;
 }
 
+CodeEdit *get_code_edit() {
+    // Bro this one bit of code took so long
+    ScriptEditorBase *editor_container = ScriptEditor::get_singleton()->_get_current_editor();
+    if (editor_container == nullptr) {
+        return nullptr;
+    }
+
+    return editor_container->get_code_editor()->get_text_editor();
+}
+
 void MultiGodot::_create_lobby() {
     if (lobby_id == 0) {
         is_lobby_owner = true;
@@ -438,18 +450,18 @@ void MultiGodot::_call_func(Node *node, String function_name, Array args, uint64
 void MultiGodot::_sync_scripts() {
     Ref<Script> current_script = script_editor->_get_current_script();
 
+    if (current_script == nullptr) {
+        return;
+    }
+
     String current_code = current_script->get_source_code();
     String path = current_script->get_path();
 
     if (last_code == current_code) {
         return;
     }
-
     last_code = current_code;
-    
-    if (current_script == nullptr) {
-        return;
-    }
+
     if (!user_data.get(steam_id).has("editor_tab_index") || (int)user_data.get(steam_id).get("editor_tab_index") != SCRIPT_EDITOR) {
         return;
     } 
@@ -471,6 +483,26 @@ void MultiGodot::_sync_scripts() {
         else {
             print_error("Two clients are on the same script which is not supported yet.");
         }
+    }
+}
+
+void MultiGodot::_sync_live_edits() {
+    CodeEdit* editor = get_code_edit();
+    if (editor == nullptr) {
+        return;
+    }
+
+    int line = editor->get_caret_line();
+    String line_text = editor->get_line(line);
+
+    if (line != script_editor_previous_line) {
+        script_editor_previous_line = line;
+        script_editor_previous_line_text = line_text;
+        return; // A line change isn't a text change, and since the text will be the same, just return.
+    }
+
+    if (line_text != script_editor_previous_line_text) {
+        _call_func(this, "_update_script_same", {line, line_text});
     }
 }
 
@@ -556,6 +588,20 @@ void MultiGodot::_update_script_different(String path, String remote_code) {
         file->store_string(remote_code);
         script_editor->reload_scripts();
     }
+}
+
+void MultiGodot::_update_script_same(int line, String line_text) {
+    CodeEdit* editor = get_code_edit();
+    if (editor == nullptr) {
+        return;
+    }
+
+    if (editor->get_caret_line() == line) {
+        print_error("Another client requested to update a line on the opened script, but we are also on that line.");
+        return;
+    }
+
+    editor->set_line(line, line_text);
 }
 
 void MultiGodot::_compare_filesystem(Vector<String> other_path_list, uint64_t host_id) {
