@@ -2,6 +2,7 @@
 #define MULTI_GODOT_H
 
 #include "button_notifier.h"
+#include "core/math/color.h"
 #include "core/object/ref_counted.h"
 #include "editor/editor_node.h"
 #include "editor/plugins/editor_plugin.h"
@@ -104,6 +105,7 @@ class MultiGodot : public Node2D {
         static const int PACKET_SIZE_LIMIT = 1200; // bytes
         static const bool VERBOSE_DEBUG = true;
         static const P2PSend SEND_TYPE = P2P_SEND_UNRELIABLE;
+        const Color LINE_OCCUPIED_BG_COLOR = Color::from_rgba8(36, 9, 14, 0.3);
 
         // NODES
 

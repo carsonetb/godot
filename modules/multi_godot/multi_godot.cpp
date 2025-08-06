@@ -488,9 +488,25 @@ void MultiGodot::_sync_live_edits() {
     int line = editor->get_caret_line();
     String line_text = editor->get_line(line);
 
+    Vector<int> occupied_lines;
+    for (int i = 0; i < handshake_completed_with.size(); i++) {
+        HashMap<String, Variant> this_data = user_data[handshake_completed_with[i]];
+        if (this_data.has("script_current_line")) {
+            int line = this_data.get("script_current_line");
+            editor->set_line_background_color(line, LINE_OCCUPIED_BG_COLOR);
+            occupied_lines.append(line);
+        }
+    }
+
     if (line != script_editor_previous_line) {
+        if (occupied_lines.has(line)) {
+            editor->set_caret_line(script_editor_previous_line);
+            return;
+        }
         script_editor_previous_line = line;
         script_editor_previous_line_text = line_text;
+        _set_user_data(steam_id, "script_current_line", line);
+        _call_func(this, "_set_user_data", {steam_id, "script_current_line", line});
         return; // A line change isn't a text change, and since the text will be the same, just return.
     }
 
