@@ -144,6 +144,8 @@ class MultiGodot : public Node2D {
         // METHODS
 
         static void _threaded_filesystem_scanner(void* p_userdata);
+        static Dictionary _hashmap_to_dictionary(HashMap<String, Variant> map);
+        static HashMap<String, Variant> _dictionary_to_hashmap(Dictionary dict);
         static Vector<String> _get_file_path_list(String path, String localized_path = "res:/");
         void _create_lobby();
         void _join_lobby(uint64_t this_lobby_id);
@@ -170,6 +172,7 @@ class MultiGodot : public Node2D {
         void _receive_file_contents(String path, String contents);
         void _delete_file(String path);
         void _rename_file(String from, String to);
+        void _sync_user_data(uint64_t user_id, Dictionary data);
 
         // SIGNALS
 

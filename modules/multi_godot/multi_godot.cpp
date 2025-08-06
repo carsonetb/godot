@@ -37,6 +37,7 @@ void MultiGodot::_bind_methods() {
     ClassDB::bind_method(D_METHOD("_receive_file_contents", "path", "contents"), &MultiGodot::_receive_file_contents);
     ClassDB::bind_method(D_METHOD("_delete_file", "path"), &MultiGodot::_delete_file);
     ClassDB::bind_method(D_METHOD("_rename_file", "from", "to"), &MultiGodot::_rename_file);
+    ClassDB::bind_method(D_METHOD("_sync_user_data", "user_id", "individual_data"), &MultiGodot::_sync_user_data);
 
     // Button signals
 
@@ -198,6 +199,30 @@ void MultiGodot::_threaded_filesystem_scanner(void *p_userdata) {
     }
 }
 
+Dictionary MultiGodot::_hashmap_to_dictionary(HashMap<String, Variant> map) {
+    Dictionary out;
+
+    HashMap<String, Variant>::Iterator i = map.begin();
+    while (i != map.end()) {
+        KeyValue<String, Variant> key_value = i.operator*(); // No idea if this is correct...
+        out.set(key_value.key, key_value.value);
+        i = i.operator++();
+    }
+
+    return out;
+}
+
+HashMap<String, Variant> MultiGodot::_dictionary_to_hashmap(Dictionary dict) {
+    HashMap<String, Variant> out;
+
+    Array keys = dict.keys();
+    for (int i = 0; i < keys.size(); i++) {
+        out[keys[i]] = dict.get(keys[i], Variant());
+    }
+
+    return out;
+}
+
 Vector<String> MultiGodot::_get_file_path_list(String path, String localized_path) {
     Vector<String> files;
 
@@ -335,6 +360,7 @@ void MultiGodot::_read_p2p_packet() {
                 if (is_lobby_owner) {
                     _sync_filesystem();
                 }
+                _call_func(this, "_sync_user_data", {steam_id, _hashmap_to_dictionary(user_data.get(steam_id))});
             }
         }
 
@@ -642,6 +668,14 @@ void MultiGodot::_rename_file(String from, String to) {
     Ref<DirAccess> dir = DirAccess::create(DirAccess::ACCESS_RESOURCES);
     dir->rename(from, to);
     EditorInterface::get_singleton()->get_resource_file_system()->scan();
+}
+
+void MultiGodot::_sync_user_data(uint64_t user_id, Dictionary individual_data) {
+    if (VERBOSE_DEBUG) {
+        print_line("Request from a client to overwrite user data.");
+        print_line(individual_data);
+    }
+    user_data.insert(user_id, _dictionary_to_hashmap(individual_data));
 }
 
 // SIGNALS
