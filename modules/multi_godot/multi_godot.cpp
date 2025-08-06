@@ -91,6 +91,8 @@ void MultiGodot::_ready() {
     }
 
     steam_id = steam->getSteamID();
+    user_data.insert(steam_id, HashMap<String, Variant>());
+
     this_project_name = ProjectSettings::get_singleton()->get("application/config/name");
 
     if (VERBOSE_DEBUG) {
@@ -750,6 +752,9 @@ void MultiGodot::_on_p2p_session_connect_fail(uint64_t this_steam_id, int sessio
 }
 
 void MultiGodot::_on_editor_tab_changed(int index) {
+    if (VERBOSE_DEBUG) {
+        print_line("Editor tab changed. Index " + (String)(Variant)index);
+    }
     int tab;
     switch (index) {
         case EditorMainScreen::EDITOR_2D: tab = VIEWPORT_2D; break;
@@ -761,6 +766,9 @@ void MultiGodot::_on_editor_tab_changed(int index) {
 }
 
 void MultiGodot::_on_current_script_path_changed(String path) {
+    if (VERBOSE_DEBUG) {
+        print_line("Current script path changed: " + path + ". Sending to clients.");
+    }
     _set_user_data(steam_id, "current_script_path", path);
     _call_func(this, "_set_user_data", {steam_id, "current_script_path", path});
 }
