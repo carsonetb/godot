@@ -24,8 +24,8 @@ void ButtonNotifier::_ready() {
 
     previous_values.insert("editor_tab", tab);
     previous_values.insert("current_script_path", "");
-    emit_signal("editor_tab_changed", tab);
-    emit_signal("current_script_path_changed", "");
+    call_deferred("emit_signal", "editor_tab_changed", tab);
+    call_deferred("emit_signal", "current_script_path_changed", "");
 }
 
 void ButtonNotifier::_process() {

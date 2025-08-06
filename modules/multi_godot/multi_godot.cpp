@@ -91,6 +91,8 @@ void MultiGodot::_ready() {
     }
 
     steam_id = steam->getSteamID();
+    user_data.insert(steam_id, HashMap<String, Variant>());
+
     this_project_name = ProjectSettings::get_singleton()->get("application/config/name");
 
     if (VERBOSE_DEBUG) {
@@ -415,6 +417,9 @@ void MultiGodot::_sync_scripts() {
     }
     for (int i = 0; i < handshake_completed_with.size(); i++) {
         uint64_t this_lobby_member = handshake_completed_with[i];
+        if (this_lobby_member == steam_id) {
+            continue;
+        }
         HashMap<String, Variant> member_info = user_data.get(this_lobby_member);
         if (!member_info.has("current_script_path") || !member_info.has("editor_tab_index")) {
             print_error("Trying to sync a script with a client but they are missing info: either current_script_path or editor_tab_index.");
@@ -481,9 +486,6 @@ void MultiGodot::_set_mouse_position(uint64_t sender, Vector2 pos) {
 }
 
 void MultiGodot::_set_user_data(uint64_t sender, String item, Variant value) {
-    if (sender == steam_id) {
-        return;
-    }
     if (unlikely(!user_data.has(sender))) {
         print_error("A sender somehow isn't in the user_data hashmap.");
         return;
@@ -747,6 +749,9 @@ void MultiGodot::_on_p2p_session_connect_fail(uint64_t this_steam_id, int sessio
 }
 
 void MultiGodot::_on_editor_tab_changed(int index) {
+    if (VERBOSE_DEBUG) {
+        print_line("Editor tab changed. Index " + (String)(Variant)index);
+    }
     int tab;
     switch (index) {
         case EditorMainScreen::EDITOR_2D: tab = VIEWPORT_2D; break;
@@ -758,6 +763,9 @@ void MultiGodot::_on_editor_tab_changed(int index) {
 }
 
 void MultiGodot::_on_current_script_path_changed(String path) {
+    if (VERBOSE_DEBUG) {
+        print_line("Current script path changed: " + path + ". Sending to clients.");
+    }
     _set_user_data(steam_id, "current_script_path", path);
     _call_func(this, "_set_user_data", {steam_id, "current_script_path", path});
 }
