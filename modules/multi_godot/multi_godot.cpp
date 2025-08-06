@@ -14,6 +14,7 @@
 #include "register_types.h"
 #include "scene/main/node.h"
 #include "scene/gui/button.h"
+#include "scene/gui/code_edit.h"
 
 MultiGodot::MultiGodot() {}
 
@@ -127,6 +128,7 @@ void MultiGodot::_process() {
 
     _sync_created_deleted_files();
     _sync_scripts();
+    _sync_live_edits();
     
     queue_redraw();
 }
@@ -252,16 +254,6 @@ Vector<String> MultiGodot::_get_file_path_list(String path, String localized_pat
     }
 
     return files;
-}
-
-CodeEdit *get_code_edit() {
-    // Bro this one bit of code took so long
-    ScriptEditorBase *editor_container = ScriptEditor::get_singleton()->_get_current_editor();
-    if (editor_container == nullptr) {
-        return nullptr;
-    }
-
-    return editor_container->get_code_editor()->get_text_editor();
 }
 
 void MultiGodot::_create_lobby() {
@@ -478,17 +470,18 @@ void MultiGodot::_sync_scripts() {
             print_error("Trying to sync a script with a client but they are missing info: either current_script_path or editor_tab_index.");
         }
         else if ((int)member_info.get("editor_tab_index") != SCRIPT_EDITOR || member_info.get("current_script_path") != (Variant)path) {
-            _call_func(this, "_update_script_different", {path, current_code});
-        }
-        else {
-            print_error("Two clients are on the same script which is not supported yet.");
+            _call_func(this, "_update_script_different", {path, current_code}, this_lobby_member);
         }
     }
 }
 
 void MultiGodot::_sync_live_edits() {
-    CodeEdit* editor = get_code_edit();
-    if (editor == nullptr) {
+    if (ScriptEditor::get_singleton()->_get_current_editor() == nullptr) {
+        return;
+    }
+    CodeEdit *editor = ScriptEditor::get_singleton()->_get_current_editor()->get_code_editor()->get_text_editor();
+    Ref<Script> current_script = script_editor->_get_current_script();
+    if (editor == nullptr || current_script == nullptr) {
         return;
     }
 
@@ -501,7 +494,23 @@ void MultiGodot::_sync_live_edits() {
         return; // A line change isn't a text change, and since the text will be the same, just return.
     }
 
-    if (line_text != script_editor_previous_line_text) {
+    if (line_text == script_editor_previous_line_text) {
+        return;
+    }
+    
+    for (int i = 0; i < handshake_completed_with.size(); i++) {
+        uint64_t this_lobby_member = handshake_completed_with[i];
+        if (this_lobby_member == steam_id) {
+            continue;
+        }
+        HashMap<String, Variant> member_info = user_data.get(this_lobby_member);
+        if (!member_info.has("current_script_path") || !member_info.has("editor_tab_index")) {
+            print_error("Trying to sync a script with a client but they are missing info: either current_script_path or editor_tab_index.");
+            continue;
+        }
+        if ((int)member_info.get("editor_tab_index") != SCRIPT_EDITOR || member_info.get("current_script_path") != (Variant)current_script->get_path()) {
+            continue;
+        }
         _call_func(this, "_update_script_same", {line, line_text});
     }
 }
@@ -591,7 +600,7 @@ void MultiGodot::_update_script_different(String path, String remote_code) {
 }
 
 void MultiGodot::_update_script_same(int line, String line_text) {
-    CodeEdit* editor = get_code_edit();
+    CodeEdit *editor = ScriptEditor::get_singleton()->_get_current_editor()->get_code_editor()->get_text_editor();
     if (editor == nullptr) {
         return;
     }

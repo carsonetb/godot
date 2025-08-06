@@ -8,6 +8,7 @@
 #include "editor/plugins/script_editor_plugin.h"
 #include "modules/godotsteam/godotsteam.h"
 #include "scene/2d/node_2d.h"
+#include "scene/gui/code_edit.h"
 
 class MultiGodot : public Node2D {
     GDCLASS(MultiGodot, Node2D);
@@ -150,7 +151,6 @@ class MultiGodot : public Node2D {
         static Dictionary _hashmap_to_dictionary(HashMap<String, Variant> map);
         static HashMap<String, Variant> _dictionary_to_hashmap(Dictionary dict);
         static Vector<String> _get_file_path_list(String path, String localized_path = "res:/");
-        static CodeEdit *get_code_edit();
         void _create_lobby();
         void _join_lobby(uint64_t this_lobby_id);
         void _get_lobby_members();
