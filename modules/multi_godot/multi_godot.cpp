@@ -437,12 +437,6 @@ void MultiGodot::_call_func(Node *node, String function_name, Array args, uint64
 
 void MultiGodot::_sync_scripts() {
     Ref<Script> current_script = script_editor->_get_current_script();
-    if (current_script == nullptr) {
-        return;
-    }
-    if (!user_data.get(steam_id).has("editor_tab_index") || (int)user_data.get(steam_id).get("editor_tab_index") != SCRIPT_EDITOR) {
-        return;
-    } 
 
     String current_code = current_script->get_source_code();
     String path = current_script->get_path();
@@ -452,6 +446,13 @@ void MultiGodot::_sync_scripts() {
     }
 
     last_code = current_code;
+    
+    if (current_script == nullptr) {
+        return;
+    }
+    if (!user_data.get(steam_id).has("editor_tab_index") || (int)user_data.get(steam_id).get("editor_tab_index") != SCRIPT_EDITOR) {
+        return;
+    } 
 
     print_line("Detected a change in a script ... syncing to clients.");
 
