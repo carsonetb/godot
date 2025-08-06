@@ -271,6 +271,7 @@ void MultiGodot::_join_lobby(uint64_t this_lobby_id) {
 
 void MultiGodot::_get_lobby_members() {
     lobby_members.clear();
+    steam_ids.clear();
 
     int num_members = steam->getNumLobbyMembers(lobby_id);
 
@@ -283,6 +284,7 @@ void MultiGodot::_get_lobby_members() {
         data_hashmap["steam_name"] = member_steam_name;
 
         lobby_members.append(data_hashmap);
+        steam_ids.append(member_steam_id);
     }
 }
 
@@ -357,6 +359,10 @@ void MultiGodot::_read_p2p_packet() {
             if (VERBOSE_DEBUG) {
                 print_line("Handshake completed with:");
                 print_line(packet_sender);
+                if (!steam_ids.has(packet_sender)) {
+                    _get_lobby_members();
+                    _make_p2p_handshake();
+                }
                 if (is_lobby_owner) {
                     _sync_filesystem();
                 }
@@ -434,6 +440,9 @@ void MultiGodot::_sync_scripts() {
     if (current_script == nullptr) {
         return;
     }
+    if (!user_data.get(steam_id).has("editor_tab_index") || (int)user_data.get(steam_id).get("editor_tab_index") != SCRIPT_EDITOR) {
+        return;
+    } 
 
     String current_code = current_script->get_source_code();
     String path = current_script->get_path();

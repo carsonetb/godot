@@ -123,6 +123,7 @@ class MultiGodot : public Node2D {
         Vector<HashMap<String, Variant>> lobby_members;
         Vector<String> new_files;
         Vector<String> deleted_files; // Both this and new_files will fill up if not cleaned up by the main thread.
+        Vector<uint64_t> steam_ids;
         Thread filesystem_scanner;
         Mutex mutex;
 
