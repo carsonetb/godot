@@ -513,6 +513,8 @@ void MultiGodot::_sync_live_edits() {
         }
         _call_func(this, "_update_script_same", {line, line_text});
     }
+
+    script_editor_previous_line_text = line_text;
 }
 
 void MultiGodot::_sync_filesystem() {
