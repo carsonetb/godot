@@ -524,14 +524,11 @@ void MultiGodot::_set_user_data(uint64_t sender, String item, Variant value) {
 
 void MultiGodot::_update_script_different(String path, String remote_code) {
     Ref<Script> current_script = script_editor->_get_current_script();
-    if (current_script == nullptr) {
-        return;
-    }
     HashMap<String, Variant> this_data = user_data.get(steam_id);
     if (!this_data.has("editor_tab_index")) {
         print_error("Missing data required to know if _update_script_different call is valid: editor_tab_index");
     }
-    else if (unlikely(current_script->get_path() == path && (int)this_data.get("editor_tab_index") == SCRIPT_EDITOR)) {
+    else if (unlikely(current_script != nullptr && current_script->get_path() == path && (int)this_data.get("editor_tab_index") == SCRIPT_EDITOR)) {
         print_error("Tried to save a script that was supposedly different from the current one but actually isn't.");
     }
     else {
