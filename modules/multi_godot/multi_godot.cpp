@@ -444,6 +444,8 @@ void MultiGodot::_sync_scripts() {
 
     last_code = current_code;
 
+    print_line("Detected a change in a script ... syncing to clients.");
+
     for (int i = 0; i < handshake_completed_with.size(); i++) {
         uint64_t this_lobby_member = handshake_completed_with[i];
         if (this_lobby_member == steam_id) { 
@@ -527,6 +529,10 @@ void MultiGodot::_set_user_data(uint64_t sender, String item, Variant value) {
 }
 
 void MultiGodot::_update_script_different(String path, String remote_code) {
+    if (VERBOSE_DEBUG) {
+        print_line("A client requested to update script at path " + path);
+    }
+
     Ref<Script> current_script = script_editor->_get_current_script();
     HashMap<String, Variant> this_data = user_data.get(steam_id);
     if (!this_data.has("editor_tab_index")) {
