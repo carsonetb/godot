@@ -415,6 +415,9 @@ void MultiGodot::_sync_scripts() {
     }
     for (int i = 0; i < handshake_completed_with.size(); i++) {
         uint64_t this_lobby_member = handshake_completed_with[i];
+        if (this_lobby_member == steam_id) { 
+            continue;
+        }
         HashMap<String, Variant> member_info = user_data.get(this_lobby_member);
         if (!member_info.has("current_script_path") || !member_info.has("editor_tab_index")) {
             print_error("Trying to sync a script with a client but they are missing info: either current_script_path or editor_tab_index.");
@@ -481,8 +484,8 @@ void MultiGodot::_set_mouse_position(uint64_t sender, Vector2 pos) {
 }
 
 void MultiGodot::_set_user_data(uint64_t sender, String item, Variant value) {
-    if (sender == steam_id) {
-        return;
+    if (VERBOSE_DEBUG) {
+        print_line("User data set: " + item + " set to " + (String)value);
     }
     if (unlikely(!user_data.has(sender))) {
         print_error("A sender somehow isn't in the user_data hashmap.");
