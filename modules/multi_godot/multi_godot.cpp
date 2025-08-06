@@ -441,6 +441,9 @@ void MultiGodot::_sync_scripts() {
     if (last_code == current_code) {
         return;
     }
+
+    last_code = current_code;
+
     for (int i = 0; i < handshake_completed_with.size(); i++) {
         uint64_t this_lobby_member = handshake_completed_with[i];
         if (this_lobby_member == steam_id) { 
@@ -473,7 +476,8 @@ void MultiGodot::_sync_created_deleted_files() {
     deleted_files = {};
     mutex.unlock();
 
-    if (created.size() > 0 && deleted.size() > 0) {
+    // Having a - after the preiod likely means the filename is something like script.gd-dyqRKE
+    if (created.size() > 0 && deleted.size() > 0 && created[0] != deleted[0] && !created[0].split(".")[-1].contains_char('-')) {
         if (VERBOSE_DEBUG) {
             print_line("File with path " + deleted[0] + " was renamed to file with path " + created[0]);
         }
