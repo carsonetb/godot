@@ -492,9 +492,9 @@ void MultiGodot::_sync_live_edits() {
     for (int i = 0; i < handshake_completed_with.size(); i++) {
         HashMap<String, Variant> this_data = user_data[handshake_completed_with[i]];
         if (this_data.has("script_current_line")) {
-            int line = this_data.get("script_current_line");
-            editor->set_line_background_color(line, LINE_OCCUPIED_BG_COLOR);
-            occupied_lines.append(line);
+            int occupied = this_data.get("script_current_line");
+            editor->set_line_background_color(occupied, LINE_OCCUPIED_BG_COLOR); // Doesn't work
+            occupied_lines.append(occupied);
         }
     }
 
