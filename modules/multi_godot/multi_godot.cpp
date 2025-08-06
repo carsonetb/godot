@@ -419,7 +419,7 @@ void MultiGodot::_sync_scripts() {
         if (!member_info.has("current_script_path") || !member_info.has("editor_tab_index")) {
             print_error("Trying to sync a script with a client but they are missing info: either current_script_path or editor_tab_index.");
         }
-        if ((int)member_info.get("editor_tab_index") != SCRIPT_EDITOR || member_info.get("current_script_path") != (Variant)path) {
+        else if ((int)member_info.get("editor_tab_index") != SCRIPT_EDITOR || member_info.get("current_script_path") != (Variant)path) {
             _call_func(this, "_update_script_different", {path, current_code});
         }
         else {
@@ -633,6 +633,7 @@ void MultiGodot::_delete_file(String path) {
 }
 
 void MultiGodot::_rename_file(String from, String to) {
+    print_line("Remote request to rename file from " + from + " to " + to);
     Ref<DirAccess> dir = DirAccess::create(DirAccess::ACCESS_RESOURCES);
     dir->rename(from, to);
     EditorInterface::get_singleton()->get_resource_file_system()->scan();

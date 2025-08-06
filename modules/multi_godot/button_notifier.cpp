@@ -20,8 +20,12 @@ void ButtonNotifier::_notification(int what) {
 void ButtonNotifier::_ready() {
     set_process_internal(true);
 
-    previous_values.insert("editor_tab", EditorNode::get_editor_main_screen()->get_selected_index());
+    int tab = EditorNode::get_editor_main_screen()->get_selected_index();
+
+    previous_values.insert("editor_tab", tab);
     previous_values.insert("current_script_path", "");
+    emit_signal("editor_tab_changed", tab);
+    emit_signal("current_script_path_changed", "");
 }
 
 void ButtonNotifier::_process() {
