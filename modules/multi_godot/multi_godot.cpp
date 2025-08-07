@@ -499,7 +499,7 @@ void MultiGodot::_sync_live_edits() {
     }
 
     bool newline = false;
-    if (Input::get_singleton()->is_key_pressed(Key::ENTER) && !editor->code_completion_active) {
+    if (Input::get_singleton()->is_key_pressed(Key::ENTER) && !editor->is_code_completion_enabled()) {
         if (!was_enter_pressed) {
             newline = true;
         }
@@ -507,6 +507,12 @@ void MultiGodot::_sync_live_edits() {
     }
     else {
         was_enter_pressed = false;
+    }
+
+    // Not the best way to check if a line was just deleted -- what about selections?
+    bool deleted_line = false;
+    if (Input::get_singleton()->is_key_pressed(Key::BACKSPACE) && script_editor_previous_length < editor->get_line_count() && script_editor_previous_line_text.is_empty()) {
+        deleted_line = true;
     }
 
     if (line != script_editor_previous_line) {
@@ -545,6 +551,7 @@ void MultiGodot::_sync_live_edits() {
 
     script_editor_previous_line_text = line_text;
     script_editor_previous_column = editor->get_caret_column();
+    script_editor_previous_length = editor->get_line_count();
 }
 
 void MultiGodot::_sync_filesystem() {
@@ -631,7 +638,7 @@ void MultiGodot::_update_script_different(String path, String remote_code) {
     }
 }
 
-void MultiGodot::_update_script_same(int line, String line_text, bool newline, int indent_from_line, int indent_from_column) {
+void MultiGodot::_update_script_same(int line, String line_text, bool newline, bool deleted_line, int action_line, int action_column) {
     CodeEdit *editor = ScriptEditor::get_singleton()->_get_current_editor()->get_code_editor()->get_text_editor();
     if (editor == nullptr) {
         return;
@@ -642,18 +649,31 @@ void MultiGodot::_update_script_same(int line, String line_text, bool newline, i
         return;
     }
 
-    if (newline) {
+    if (newline || deleted_line) {
         int previous_caret_line = editor->get_caret_line();
         int previous_caret_column = editor->get_caret_column();
-        editor->set_caret_line(indent_from_line, false);
-        editor->set_caret_column(indent_from_column, false);
-        editor->_new_line();
-        if (previous_caret_line > indent_from_line) {
-            previous_caret_line++;
+        editor->set_caret_line(action_line, false);
+        editor->set_caret_column(action_column, false);
+
+        if (newline) {
+            editor->_new_line();
+            if (previous_caret_line > action_line) {
+                previous_caret_line++;
+            }
         }
+
+        if (deleted_line) {
+            editor->set_line(action_line, ""); // Technically shouldn't be neccessary but just in case.
+            editor->backspace();
+            if (previous_caret_line > action_line) {
+                previous_caret_line--;
+            }
+        }
+
         editor->set_caret_line(previous_caret_line, false);
         editor->set_caret_column(previous_caret_column, false);
     }
+
 
     editor->set_line(line, line_text);
 }
