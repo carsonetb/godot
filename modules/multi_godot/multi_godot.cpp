@@ -499,7 +499,7 @@ void MultiGodot::_sync_live_edits() {
     }
 
     bool newline = false;
-    if (Input::get_singleton()->is_key_pressed(Key::ENTER)) {
+    if (Input::get_singleton()->is_key_pressed(Key::ENTER) && !editor->code_completion_active) {
         if (!was_enter_pressed) {
             newline = true;
         }
@@ -523,7 +523,7 @@ void MultiGodot::_sync_live_edits() {
         }
     }
 
-    if (line_text == script_editor_previous_line_text) {
+    if (line_text == script_editor_previous_line_text && !newline) {
         return;
     }
     

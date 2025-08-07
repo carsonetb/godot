@@ -61,6 +61,7 @@ public:
 	};
 
 	void _new_line(bool p_split_current_line = true, bool p_above = false);
+	bool code_completion_active = false;
 
 private:
 	/* Indent management */
@@ -205,7 +206,6 @@ private:
 	bool code_completion_enabled = false;
 	bool code_completion_forced = false;
 
-	bool code_completion_active = false;
 	bool is_code_completion_scroll_hovered = false;
 	bool is_code_completion_scroll_pressed = false;
 	bool is_code_completion_drag_started = false;
