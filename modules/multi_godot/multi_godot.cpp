@@ -511,12 +511,14 @@ void MultiGodot::_sync_live_edits() {
 
     // Not the best way to check if a line was just deleted -- what about selections?
     bool deleted_line = false;
-    if (Input::get_singleton()->is_key_pressed(Key::BACKSPACE) && script_editor_previous_length < editor->get_line_count() && script_editor_previous_line_text.is_empty()) {
+    if (Input::get_singleton()->is_key_pressed(Key::BACKSPACE) && script_editor_previous_line_text.is_empty() && editor->get_line_count() < script_editor_previous_length) {
         deleted_line = true;
     }
 
+    script_editor_previous_length = editor->get_line_count(); // Might need to move this forward in the future...
+
     if (line != script_editor_previous_line) {
-        if (occupied_lines.has(line)) {
+        if (occupied_lines.has(line) && !newline) {
             editor->set_caret_line(script_editor_previous_line);
             return;
         }
@@ -524,12 +526,12 @@ void MultiGodot::_sync_live_edits() {
         script_editor_previous_line_text = line_text;
         _set_user_data(steam_id, "script_current_line", line);
         _call_func(this, "_set_user_data", {steam_id, "script_current_line", line});
-        if (!newline) {
+        if (!newline && !deleted_line) {
             return; // A line change isn't a text change, and since the text will be the same, just return.
         }
     }
 
-    if (line_text == script_editor_previous_line_text && !newline) {
+    if (line_text == script_editor_previous_line_text && !newline && !deleted_line) {
         return;
     }
     
@@ -546,12 +548,11 @@ void MultiGodot::_sync_live_edits() {
         if ((int)member_info.get("editor_tab_index") != SCRIPT_EDITOR || member_info.get("current_script_path") != (Variant)current_script->get_path()) {
             continue;
         }
-        _call_func(this, "_update_script_same", {line, line_text, newline, script_editor_previous_line, script_editor_previous_column});
+        _call_func(this, "_update_script_same", {line, line_text, newline, deleted_line, script_editor_previous_line, script_editor_previous_column});
     }
 
     script_editor_previous_line_text = line_text;
     script_editor_previous_column = editor->get_caret_column();
-    script_editor_previous_length = editor->get_line_count();
 }
 
 void MultiGodot::_sync_filesystem() {
@@ -644,7 +645,7 @@ void MultiGodot::_update_script_same(int line, String line_text, bool newline, b
         return;
     }
 
-    if (editor->get_caret_line() == line) {
+    if (editor->get_caret_line() == line && !newline) {
         print_error("Another client requested to update a line on the opened script, but we are also on that line.");
         return;
     }
