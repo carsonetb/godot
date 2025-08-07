@@ -117,11 +117,13 @@ class MultiGodot : public Node2D {
         // PROPERTIES
 
         int script_editor_previous_line = 0;
+        int script_editor_previous_column = 0;
         uint64_t lobby_id = 0;
         uint64_t steam_id = 0;
         bool is_lobby_owner = false;
         bool printed = false;
         bool stop_filesystem_scanner = false;
+        bool was_enter_pressed = false;
         String this_project_name;
         String last_code;
         String script_editor_previous_line_text;
@@ -174,7 +176,7 @@ class MultiGodot : public Node2D {
         void _set_mouse_position(uint64_t sender, Vector2 pos);
         void _set_user_data(uint64_t sender, String item, Variant value);
         void _update_script_different(String path, String code);
-        void _update_script_same(int line, String line_text);
+        void _update_script_same(int line, String line_text, bool newline, int indent_from_line, int indent_from_column);
         void _compare_filesystem(Vector<String> path_list, uint64_t host_id);
         void _request_file_contents(uint64_t client_id);
         void _receive_file_contents(String path, String contents);

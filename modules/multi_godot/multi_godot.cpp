@@ -34,7 +34,7 @@ void MultiGodot::_bind_methods() {
     ClassDB::bind_method(D_METHOD("_set_mouse_position", "sender", "position"), &MultiGodot::_set_mouse_position);
     ClassDB::bind_method(D_METHOD("_set_user_data", "sender", "item", "data"), &MultiGodot::_set_user_data);
     ClassDB::bind_method(D_METHOD("_update_script_different", "path", "remote_code"), &MultiGodot::_update_script_different);
-    ClassDB::bind_method(D_METHOD("_update_script_same", "line", "line_text"), &MultiGodot::_update_script_same);
+    ClassDB::bind_method(D_METHOD("_update_script_same", "line", "line_text", "newline", "indent_from_line", "indent_from_column"), &MultiGodot::_update_script_same);
     ClassDB::bind_method(D_METHOD("_compare_filesystem", "other_path_list", "host_id"), &MultiGodot::_compare_filesystem);
     ClassDB::bind_method(D_METHOD("_request_file_contents", "client_id"), &MultiGodot::_request_file_contents);
     ClassDB::bind_method(D_METHOD("_receive_file_contents", "path", "contents"), &MultiGodot::_receive_file_contents);
@@ -498,6 +498,17 @@ void MultiGodot::_sync_live_edits() {
         }
     }
 
+    bool newline = false;
+    if (Input::get_singleton()->is_key_pressed(Key::ENTER)) {
+        if (!was_enter_pressed) {
+            newline = true;
+        }
+        was_enter_pressed = true;
+    }
+    else {
+        was_enter_pressed = false;
+    }
+
     if (line != script_editor_previous_line) {
         if (occupied_lines.has(line)) {
             editor->set_caret_line(script_editor_previous_line);
@@ -507,7 +518,9 @@ void MultiGodot::_sync_live_edits() {
         script_editor_previous_line_text = line_text;
         _set_user_data(steam_id, "script_current_line", line);
         _call_func(this, "_set_user_data", {steam_id, "script_current_line", line});
-        return; // A line change isn't a text change, and since the text will be the same, just return.
+        if (!newline) {
+            return; // A line change isn't a text change, and since the text will be the same, just return.
+        }
     }
 
     if (line_text == script_editor_previous_line_text) {
@@ -527,10 +540,11 @@ void MultiGodot::_sync_live_edits() {
         if ((int)member_info.get("editor_tab_index") != SCRIPT_EDITOR || member_info.get("current_script_path") != (Variant)current_script->get_path()) {
             continue;
         }
-        _call_func(this, "_update_script_same", {line, line_text});
+        _call_func(this, "_update_script_same", {line, line_text, newline, script_editor_previous_line, script_editor_previous_column});
     }
 
     script_editor_previous_line_text = line_text;
+    script_editor_previous_column = editor->get_caret_column();
 }
 
 void MultiGodot::_sync_filesystem() {
@@ -617,7 +631,7 @@ void MultiGodot::_update_script_different(String path, String remote_code) {
     }
 }
 
-void MultiGodot::_update_script_same(int line, String line_text) {
+void MultiGodot::_update_script_same(int line, String line_text, bool newline, int indent_from_line, int indent_from_column) {
     CodeEdit *editor = ScriptEditor::get_singleton()->_get_current_editor()->get_code_editor()->get_text_editor();
     if (editor == nullptr) {
         return;
@@ -626,6 +640,19 @@ void MultiGodot::_update_script_same(int line, String line_text) {
     if (editor->get_caret_line() == line) {
         print_error("Another client requested to update a line on the opened script, but we are also on that line.");
         return;
+    }
+
+    if (newline) {
+        int previous_caret_line = editor->get_caret_line();
+        int previous_caret_column = editor->get_caret_column();
+        editor->set_caret_line(indent_from_line, false);
+        editor->set_caret_column(indent_from_column, false);
+        editor->_new_line();
+        if (previous_caret_line > indent_from_line) {
+            previous_caret_line++;
+        }
+        editor->set_caret_line(previous_caret_line, false);
+        editor->set_caret_column(previous_caret_column, false);
     }
 
     editor->set_line(line, line_text);

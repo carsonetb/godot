@@ -41,6 +41,8 @@ class TextEdit : public Control {
 	GDCLASS(TextEdit, Control);
 
 public:
+	void _new_line(bool p_split_current = true, bool p_above = false);
+	
 	/* Edit Actions. */
 	enum EditAction {
 		ACTION_NONE,
@@ -666,7 +668,6 @@ private:
 
 	/* Input actions. */
 	void _swap_current_input_direction();
-	void _new_line(bool p_split_current = true, bool p_above = false);
 	void _move_caret_left(bool p_select, bool p_move_by_word = false);
 	void _move_caret_right(bool p_select, bool p_move_by_word = false);
 	void _move_caret_up(bool p_select);

@@ -60,6 +60,8 @@ public:
 		LOCATION_OTHER = 1 << 10,
 	};
 
+	void _new_line(bool p_split_current_line = true, bool p_above = false);
+
 private:
 	/* Indent management */
 	int indent_size = 4;
@@ -71,8 +73,6 @@ private:
 	bool indent_using_spaces = false;
 	int _calculate_spaces_till_next_left_indent(int p_column) const;
 	int _calculate_spaces_till_next_right_indent(int p_column) const;
-
-	void _new_line(bool p_split_current_line = true, bool p_above = false);
 
 	/* Auto brace completion */
 	bool auto_brace_completion_enabled = false;
