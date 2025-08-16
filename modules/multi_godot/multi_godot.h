@@ -4,6 +4,7 @@
 #include "button_notifier.h"
 #include "core/math/color.h"
 #include "core/object/ref_counted.h"
+#include "core/templates/pair.h"
 #include "editor/editor_node.h"
 #include "editor/plugins/editor_plugin.h"
 #include "editor/plugins/script_editor_plugin.h"
@@ -104,6 +105,7 @@ class MultiGodot : public Node2D {
         static const int DEFAULT_CHANNEL = 0;
         static const int PACKET_SIZE_LIMIT = 1200; // bytes
         static const bool VERBOSE_DEBUG = true;
+        static const bool ENABLE_SAME_FILE_EDITS = false;
         static const P2PSend SEND_TYPE = P2P_SEND_UNRELIABLE;
         const Color LINE_OCCUPIED_BG_COLOR = Color::from_rgba8(36, 9, 14, 0.3);
 
@@ -125,8 +127,10 @@ class MultiGodot : public Node2D {
         bool printed = false;
         bool stop_filesystem_scanner = false;
         bool was_enter_pressed = false;
+        bool is_script_owner = false;
         String this_project_name;
         String last_code;
+        String live_last_code;
         String script_editor_previous_line_text;
         Vector<HashMap<String, Variant>> lobby_members;
         Vector<String> new_files;
@@ -156,6 +160,7 @@ class MultiGodot : public Node2D {
         static Dictionary _hashmap_to_dictionary(HashMap<String, Variant> map);
         static HashMap<String, Variant> _dictionary_to_hashmap(Dictionary dict);
         static Vector<String> _get_file_path_list(String path, String localized_path = "res:/");
+        static CodeEdit *_get_code_editor();
         void _create_lobby();
         void _join_lobby(uint64_t this_lobby_id);
         void _get_lobby_members();
@@ -168,9 +173,11 @@ class MultiGodot : public Node2D {
         void _sync_var(Node *node, StringName property, uint64_t custom_target = 0);
         void _call_func(Node *node, String function_name, Array args, uint64_t custom_target = 0);
         void _sync_scripts();
+        void _sync_live_edits_skewed();
         void _sync_live_edits();
         void _sync_filesystem();
         void _sync_created_deleted_files();
+        void _set_user_data_for_everyone(String item, Variant value);
 
         // REMOTE CALLABLES
 
@@ -178,6 +185,7 @@ class MultiGodot : public Node2D {
         void _set_user_data(uint64_t sender, String item, Variant value);
         void _update_script_different(String path, String code);
         void _update_script_same(int line, String line_text, bool newline, bool deleted_line, int indent_from_line, int indent_from_column);
+        void _update_script_same_skewed(uint64_t from, String contents);
         void _compare_filesystem(Vector<String> path_list, uint64_t host_id);
         void _request_file_contents(uint64_t client_id);
         void _receive_file_contents(String path, String contents);

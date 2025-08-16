@@ -4,6 +4,7 @@
 #include "core/os/mutex.h"
 #include "core/os/thread.h"
 #include "core/object/script_language.h"
+#include "core/templates/pair.h"
 #include "core/variant/variant_utility.h"
 #include "editor/code_editor.h"
 #include "editor/editor_file_system.h"
@@ -35,6 +36,7 @@ void MultiGodot::_bind_methods() {
     ClassDB::bind_method(D_METHOD("_set_user_data", "sender", "item", "data"), &MultiGodot::_set_user_data);
     ClassDB::bind_method(D_METHOD("_update_script_different", "path", "remote_code"), &MultiGodot::_update_script_different);
     ClassDB::bind_method(D_METHOD("_update_script_same", "line", "line_text", "newline", "indent_from_line", "indent_from_column"), &MultiGodot::_update_script_same);
+    ClassDB::bind_method(D_METHOD("_update_script_same_skewed", "from", "contents"), &MultiGodot::_update_script_same_skewed);
     ClassDB::bind_method(D_METHOD("_compare_filesystem", "other_path_list", "host_id"), &MultiGodot::_compare_filesystem);
     ClassDB::bind_method(D_METHOD("_request_file_contents", "client_id"), &MultiGodot::_request_file_contents);
     ClassDB::bind_method(D_METHOD("_receive_file_contents", "path", "contents"), &MultiGodot::_receive_file_contents);
@@ -115,6 +117,18 @@ void MultiGodot::_ready() {
     steam->connect("p2p_session_connect_fail", Callable(this, "_on_p2p_session_connect_fail"));
     steam->addRequestLobbyListDistanceFilter(LOBBY_DISTANCE_FILTER_WORLDWIDE);
     steam->requestLobbyList();
+
+    Vector<KeyValue<String, Variant>> initial_user_data = {
+        {"script_current_line", 0},
+        {"editor_tab_index", 0},
+        {"current_script_path", ""},
+        {"current_spectating_script", ""},
+    };
+
+    for (int i = 0; i < initial_user_data.size(); i++) {
+        KeyValue<String, Variant> value = initial_user_data[i];
+        _set_user_data(steam_id, value.key, value.value);
+    }
 }
 
 void MultiGodot::_process() {
@@ -128,7 +142,12 @@ void MultiGodot::_process() {
 
     _sync_created_deleted_files();
     _sync_scripts();
-    _sync_live_edits();
+    if (ENABLE_SAME_FILE_EDITS) {
+        _sync_live_edits();
+    }
+    else {
+        _sync_live_edits_skewed();
+    }
     
     queue_redraw();
 }
@@ -256,6 +275,14 @@ Vector<String> MultiGodot::_get_file_path_list(String path, String localized_pat
     return files;
 }
 
+CodeEdit *_get_code_editor() {
+    ScriptEditorBase* script_editor_container = ScriptEditor::get_singleton()->_get_current_editor();
+    if (script_editor_container == nullptr) {
+        return;
+    }
+    return script_editor_container->get_code_editor()->get_text_editor();
+}
+
 void MultiGodot::_create_lobby() {
     if (lobby_id == 0) {
         is_lobby_owner = true;
@@ -363,15 +390,15 @@ void MultiGodot::_read_p2p_packet() {
             if (VERBOSE_DEBUG) {
                 print_line("Handshake completed with:");
                 print_line(packet_sender);
-                if (!steam_ids.has(packet_sender)) {
-                    _get_lobby_members();
-                    _make_p2p_handshake();
-                }
-                if (is_lobby_owner) {
-                    _sync_filesystem();
-                }
-                _call_func(this, "_sync_user_data", {steam_id, _hashmap_to_dictionary(user_data.get(steam_id))});
             }
+            if (!steam_ids.has(packet_sender)) {
+                _get_lobby_members();
+                _make_p2p_handshake();
+            }
+            if (is_lobby_owner) {
+                _sync_filesystem();
+            }
+            _call_func(this, "_sync_user_data", {steam_id, _hashmap_to_dictionary(user_data.get(steam_id))});
         }
 
         if (message == "sync_var") {
@@ -454,7 +481,8 @@ void MultiGodot::_sync_scripts() {
     }
     last_code = current_code;
 
-    if (!user_data.get(steam_id).has("editor_tab_index") || (int)user_data.get(steam_id).get("editor_tab_index") != SCRIPT_EDITOR) {
+    HashMap<String, Variant> this_data = user_data.get(steam_id);
+    if (!this_data.has("editor_tab_index") || (int)this_data.get("editor_tab_index") != SCRIPT_EDITOR) {
         return;
     } 
 
@@ -475,11 +503,40 @@ void MultiGodot::_sync_scripts() {
     }
 }
 
-void MultiGodot::_sync_live_edits() {
-    if (ScriptEditor::get_singleton()->_get_current_editor() == nullptr) {
+void MultiGodot::_sync_live_edits_skewed() {
+    CodeEdit *editor = _get_code_editor();
+    Ref<Script> current_script = script_editor->_get_current_script();
+    if (editor == nullptr || current_script == nullptr) {
         return;
     }
-    CodeEdit *editor = ScriptEditor::get_singleton()->_get_current_editor()->get_code_editor()->get_text_editor();
+
+    String path = current_script->get_path();
+    String code = editor->get_text();
+    if (code == live_last_code) {
+        return;
+    }
+
+    HashMap<String, Variant> this_data = user_data[steam_id];
+    if ((String)this_data["current_script_path"] == "") {
+        editor->set_text(live_last_code);
+        return;
+    }
+
+    for (int i = 0; i < handshake_completed_with.size(); i++) {
+        uint64_t other_id = handshake_completed_with[i];
+        HashMap<String, Variant> other_data = user_data[other_id];
+        if (other_id == steam_id || (String)other_data["current_spectating_script"] != path) {
+            continue;
+        }
+
+        _call_func(this, "_update_script_skewed", {steam_id, code});
+    }
+}
+
+void MultiGodot::_sync_live_edits() {
+    // Unfinished method for two people to edit at once. I think for now I'm just going to do
+    // only one person can edit and they "own" the file.
+    CodeEdit *editor = _get_code_editor();
     Ref<Script> current_script = script_editor->_get_current_script();
     if (editor == nullptr || current_script == nullptr) {
         return;
@@ -524,8 +581,7 @@ void MultiGodot::_sync_live_edits() {
         }
         script_editor_previous_line = line;
         script_editor_previous_line_text = line_text;
-        _set_user_data(steam_id, "script_current_line", line);
-        _call_func(this, "_set_user_data", {steam_id, "script_current_line", line});
+        _set_user_data_for_everyone("script_current_line", line);
         if (!newline && !deleted_line) {
             return; // A line change isn't a text change, and since the text will be the same, just return.
         }
@@ -602,6 +658,11 @@ void MultiGodot::_sync_created_deleted_files() {
     }
 }
 
+void MultiGodot::_set_user_data_for_everyone(String item, Variant value) {
+    _set_user_data(steam_id, item, value);
+    _call_func(this, "_set_user_data", {item, value});
+}
+
 // REMOTE CALLABLES
 
 void MultiGodot::_set_mouse_position(uint64_t sender, Vector2 pos) { 
@@ -658,7 +719,7 @@ void MultiGodot::_update_script_same(int line, String line_text, bool newline, b
 
         if (newline) {
             editor->_new_line();
-            if (previous_caret_line > action_line) {
+            if (previous_caret_line >= action_line) {
                 previous_caret_line++;
             }
         }
@@ -677,6 +738,22 @@ void MultiGodot::_update_script_same(int line, String line_text, bool newline, b
 
 
     editor->set_line(line, line_text);
+}
+
+void MultiGodot::_update_script_same_skewed(uint64_t from, String contents) {
+    String this_spectating = user_data[steam_id]["current_spectating_script"];
+    String other_editing = user_data[from]["current_script_path"];
+    if (this_spectating == "" || this_spectating != other_editing) {
+        print_error("Requested to update script as a spectator, but we are spectating " + this_spectating + " and they are editing " + other_editing);
+        return;
+    }
+
+    CodeEdit *editor = _get_code_editor();
+    if (editor == nullptr) {
+        print_error("Editor is null"); // This should never happen
+        return;
+    }
+    editor->set_text(contents);
 }
 
 void MultiGodot::_compare_filesystem(Vector<String> other_path_list, uint64_t host_id) {
@@ -747,6 +824,14 @@ void MultiGodot::_compare_filesystem(Vector<String> other_path_list, uint64_t ho
     _call_func(this, "_request_file_contents", {steam_id}, host_id);
 }
 
+void MultiGodot::_sync_user_data(uint64_t user_id, Dictionary individual_data) {
+    if (VERBOSE_DEBUG) {
+        print_line("Request from a client to overwrite user data.");
+        print_line(individual_data);
+    }
+    user_data.insert(user_id, _dictionary_to_hashmap(individual_data));
+}
+
 void MultiGodot::_request_file_contents(uint64_t client_id) {
     if (!is_lobby_owner) {
         print_error("Request to get file contents to a non-host.");
@@ -780,6 +865,12 @@ void MultiGodot::_receive_file_contents(String path, String contents) {
     Ref<FileAccess> file = FileAccess::open(path, FileAccess::WRITE);
     file->store_string(contents);
     EditorInterface::get_singleton()->get_resource_file_system()->scan();
+
+    ScriptEditorBase *script_editor = ScriptEditor::get_singleton()->_get_current_editor();
+    if (script_editor == nullptr) {
+        return;
+    }
+    script_editor->reload(false);
 }
 
 void MultiGodot::_delete_file(String path) {
@@ -806,14 +897,6 @@ void MultiGodot::_rename_file(String from, String to) {
     Ref<DirAccess> dir = DirAccess::create(DirAccess::ACCESS_RESOURCES);
     dir->rename(from, to);
     EditorInterface::get_singleton()->get_resource_file_system()->scan();
-}
-
-void MultiGodot::_sync_user_data(uint64_t user_id, Dictionary individual_data) {
-    if (VERBOSE_DEBUG) {
-        print_line("Request from a client to overwrite user data.");
-        print_line(individual_data);
-    }
-    user_data.insert(user_id, _dictionary_to_hashmap(individual_data));
 }
 
 // SIGNALS
@@ -933,16 +1016,29 @@ void MultiGodot::_on_editor_tab_changed(int index) {
         case EditorMainScreen::EDITOR_3D: tab = VIEWPORT_3D; break;
         case EditorMainScreen::EDITOR_SCRIPT: tab = SCRIPT_EDITOR; break;
     };
-    _set_user_data(steam_id, "editor_tab_index", tab);
-    _call_func(this, "_set_user_data", {steam_id, "editor_tab_index", tab});
+    _set_user_data_for_everyone("editor_tab_index", tab);
 }
 
 void MultiGodot::_on_current_script_path_changed(String path) {
     if (VERBOSE_DEBUG) {
         print_line("Current script path changed: " + path + ". Sending to clients.");
     }
-    _set_user_data(steam_id, "current_script_path", path);
-    _call_func(this, "_set_user_data", {steam_id, "current_script_path", path});
+    if (!ENABLE_SAME_FILE_EDITS) { // Set script path to empty if someone else is already on it.
+        for (int i = 0; i < steam_ids.size(); i++) {
+            uint64_t this_steam_id = steam_ids[i];
+            if (this_steam_id == steam_id) {
+                continue;
+            }
+            HashMap<String, Variant> this_user_data = user_data[this_steam_id];
+            if ((String)this_user_data["current_script_path"] == path) { // Possibly Variant->String is an unsafe cast?
+                _set_user_data_for_everyone("current_script_path", ""); // Because we are spectating the script it isn't really "our" script.
+                _set_user_data_for_everyone("current_spectating_script", path);
+                return;
+            }
+        }
+    }
+    _set_user_data_for_everyone("current_script_path", path);
+    _set_user_data_for_everyone("current_spectating_script", "");
 }
 
 // PLUGIN
