@@ -118,16 +118,17 @@ void MultiGodot::_ready() {
     steam->addRequestLobbyListDistanceFilter(LOBBY_DISTANCE_FILTER_WORLDWIDE);
     steam->requestLobbyList();
 
-    Vector<KeyValue<String, Variant>> initial_user_data = {
-        {"script_current_line", 0},
-        {"editor_tab_index", 0},
-        {"current_script_path", ""},
-        {"current_spectating_script", ""},
+    const Vector<String> initial_keys = {
+        "script_current_line",
+        "editor_tab_index",
+        "current_script_path",
+        "current_spectating_script",
     };
 
-    for (int i = 0; i < initial_user_data.size(); i++) {
-        KeyValue<String, Variant> value = initial_user_data[i];
-        _set_user_data(steam_id, value.key, value.value);
+    const Vector<Variant> initial_values = {0, 0, "", ""};
+
+    for (int i = 0; i < initial_keys.size(); i++) {
+        _set_user_data(steam_id, initial_keys[i], initial_values[i]);
     }
 }
 
@@ -275,10 +276,10 @@ Vector<String> MultiGodot::_get_file_path_list(String path, String localized_pat
     return files;
 }
 
-CodeEdit *_get_code_editor() {
+CodeEdit *MultiGodot::_get_code_editor() {
     ScriptEditorBase* script_editor_container = ScriptEditor::get_singleton()->_get_current_editor();
     if (script_editor_container == nullptr) {
-        return;
+        return nullptr;
     }
     return script_editor_container->get_code_editor()->get_text_editor();
 }
@@ -517,6 +518,9 @@ void MultiGodot::_sync_live_edits_skewed() {
     }
 
     HashMap<String, Variant> this_data = user_data[steam_id];
+    if ((int)this_data["editor_tab_index"] != SCRIPT_EDITOR) {
+        return;
+    }
     if ((String)this_data["current_script_path"] == "") {
         editor->set_text(live_last_code);
         return;
@@ -866,11 +870,11 @@ void MultiGodot::_receive_file_contents(String path, String contents) {
     file->store_string(contents);
     EditorInterface::get_singleton()->get_resource_file_system()->scan();
 
-    ScriptEditorBase *script_editor = ScriptEditor::get_singleton()->_get_current_editor();
-    if (script_editor == nullptr) {
+    ScriptEditorBase *code_container = ScriptEditor::get_singleton()->_get_current_editor();
+    if (code_container == nullptr) {
         return;
     }
-    script_editor->reload(false);
+    code_container->reload(false);
 }
 
 void MultiGodot::_delete_file(String path) {
@@ -1017,6 +1021,10 @@ void MultiGodot::_on_editor_tab_changed(int index) {
         case EditorMainScreen::EDITOR_SCRIPT: tab = SCRIPT_EDITOR; break;
     };
     _set_user_data_for_everyone("editor_tab_index", tab);
+    if (tab == SCRIPT_EDITOR) {
+        _set_user_data_for_everyone("current_script_path", "");
+        _set_user_data_for_everyone("current_spectating_script", "");
+    }
 }
 
 void MultiGodot::_on_current_script_path_changed(String path) {
