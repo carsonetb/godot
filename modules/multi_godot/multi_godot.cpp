@@ -43,6 +43,7 @@ void MultiGodot::_bind_methods() {
     ClassDB::bind_method(D_METHOD("_delete_file", "path"), &MultiGodot::_delete_file);
     ClassDB::bind_method(D_METHOD("_rename_file", "from", "to"), &MultiGodot::_rename_file);
     ClassDB::bind_method(D_METHOD("_sync_user_data", "user_id", "individual_data"), &MultiGodot::_sync_user_data);
+    ClassDB::bind_method(D_METHOD("_set_as_script_owner", "path"), &MultiGodot::_set_as_script_owner);
 
     // Button signals
 
@@ -917,6 +918,11 @@ void MultiGodot::_rename_file(String from, String to) {
     EditorInterface::get_singleton()->get_resource_file_system()->scan();
 }
 
+void MultiGodot::_set_as_script_owner(String path) {
+    _set_user_data_for_everyone("current_script_path", path);
+    _set_user_data_for_everyone("current_spectating_script", "");
+}
+
 // SIGNALS
 
 void MultiGodot::_on_lobby_created(int connect, uint64_t this_lobby_id) {
@@ -1045,6 +1051,9 @@ void MultiGodot::_on_current_script_path_changed(String path) {
     if (VERBOSE_DEBUG) {
         print_line("Current script path changed: " + path + ". Sending to clients.");
     }
+
+    String old_path = user_data[steam_id]["current_script_path"];
+    bool already_reset_owner = false;
     if (!ENABLE_SAME_FILE_EDITS) { // Set script path to empty if someone else is already on it.
         for (int i = 0; i < steam_ids.size(); i++) {
             uint64_t this_steam_id = steam_ids[i];
@@ -1057,8 +1066,13 @@ void MultiGodot::_on_current_script_path_changed(String path) {
                 _set_user_data_for_everyone("current_spectating_script", path);
                 return;
             }
+            else if (!already_reset_owner && (String)this_user_data["current_spectating_script"] == old_path) {
+                already_reset_owner = true;
+                _call_func(this, "_set_as_script_owner", {old_path}, this_steam_id);
+            }
         }
     }
+
     _set_user_data_for_everyone("current_script_path", path);
     _set_user_data_for_everyone("current_spectating_script", "");
 }

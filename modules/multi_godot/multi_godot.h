@@ -192,6 +192,7 @@ class MultiGodot : public Node2D {
         void _delete_file(String path);
         void _rename_file(String from, String to);
         void _sync_user_data(uint64_t user_id, Dictionary data);
+        void _set_as_script_owner(String path);
 
         // SIGNALS
 
