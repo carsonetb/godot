@@ -523,14 +523,21 @@ void MultiGodot::_sync_live_edits_skewed() {
     }
     if ((String)this_data["current_script_path"] == "") {
         editor->set_text(live_last_code);
+        live_last_code = code;
         return;
     }
+    live_last_code = code;
 
     for (int i = 0; i < handshake_completed_with.size(); i++) {
         uint64_t other_id = handshake_completed_with[i];
         HashMap<String, Variant> other_data = user_data[other_id];
         if (other_id == steam_id || (String)other_data["current_spectating_script"] != path) {
             continue;
+        }
+
+        if ((String)other_data["current_script_path"] == path) { // We probably joined in the same script and didn't realize ...
+            _on_current_script_path_changed(path);
+            return;
         }
 
         _call_func(this, "_update_script_skewed", {steam_id, code});
@@ -664,7 +671,7 @@ void MultiGodot::_sync_created_deleted_files() {
 
 void MultiGodot::_set_user_data_for_everyone(String item, Variant value) {
     _set_user_data(steam_id, item, value);
-    _call_func(this, "_set_user_data", {item, value});
+    _call_func(this, "_set_user_data", {steam_id, item, value});
 }
 
 // REMOTE CALLABLES
@@ -870,11 +877,9 @@ void MultiGodot::_receive_file_contents(String path, String contents) {
     file->store_string(contents);
     EditorInterface::get_singleton()->get_resource_file_system()->scan();
 
-    ScriptEditorBase *code_container = ScriptEditor::get_singleton()->_get_current_editor();
-    if (code_container == nullptr) {
-        return;
+    if (script_editor != nullptr) {
+        script_editor->reload_scripts();
     }
-    code_container->reload(false);
 }
 
 void MultiGodot::_delete_file(String path) {
