@@ -522,8 +522,11 @@ void MultiGodot::_sync_live_edits_skewed() {
         return;
     }
     if ((String)this_data["current_script_path"] == "") {
+        int last_caret_line = editor->get_caret_line();
+        int last_caret_column = editor->get_caret_column();
         editor->set_text(live_last_code);
-        live_last_code = code;
+        editor->set_caret_line(last_caret_line);
+        editor->set_caret_column(last_caret_column);
         return;
     }
     live_last_code = code;
@@ -531,16 +534,17 @@ void MultiGodot::_sync_live_edits_skewed() {
     for (int i = 0; i < handshake_completed_with.size(); i++) {
         uint64_t other_id = handshake_completed_with[i];
         HashMap<String, Variant> other_data = user_data[other_id];
-        if (other_id == steam_id || (String)other_data["current_spectating_script"] != path) {
-            continue;
-        }
 
         if ((String)other_data["current_script_path"] == path) { // We probably joined in the same script and didn't realize ...
             _on_current_script_path_changed(path);
             return;
         }
 
-        _call_func(this, "_update_script_skewed", {steam_id, code});
+        if (other_id == steam_id || (String)other_data["current_spectating_script"] != path) {
+            continue;
+        }
+
+        _call_func(this, "_update_script_same_skewed", {steam_id, code});
     }
 }
 
@@ -764,7 +768,12 @@ void MultiGodot::_update_script_same_skewed(uint64_t from, String contents) {
         print_error("Editor is null"); // This should never happen
         return;
     }
+    int last_caret_line = editor->get_caret_line();
+    int last_caret_column = editor->get_caret_column();
     editor->set_text(contents);
+    editor->set_caret_line(last_caret_line);
+    editor->set_caret_column(last_caret_column);
+    live_last_code = contents;
 }
 
 void MultiGodot::_compare_filesystem(Vector<String> other_path_list, uint64_t host_id) {
