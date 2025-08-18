@@ -91,6 +91,8 @@ void MultiGodot::_ready() {
     if ((int)initialize_response["status"] > STEAM_API_INIT_RESULT_OK) {
         print_error(String("Steam did not initialize correctly. Response: "));
         print_line(initialize_response);
+        print_error("Shutting down MultiGodot.");
+        queue_free();
         return;
     }
 
@@ -161,11 +163,15 @@ void MultiGodot::_process() {
             continue;
         }
         HashMap<String, Variant> this_user_data = user_data[handshake_completed_with[i]];
+        if (!this_user_data.has("current_script_path")) {
+            continue;
+        }
         String this_current_script = this_user_data["current_script_path"];
-        String formatted = this_current_script.split("/")[-1];
         if (this_current_script == "") {
             continue;
         }
+        Vector<String> split_spaces = this_current_script.split("/");
+        String formatted = split_spaces[split_spaces.size() - 1];
         for (int j = 0; j < script_list->items.size(); j++) {
             ItemList::Item item = script_list->items[j];
             
