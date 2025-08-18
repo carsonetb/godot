@@ -36,8 +36,7 @@ void MultiGodot::_bind_methods() {
     ClassDB::bind_method(D_METHOD("_set_mouse_position", "sender", "position"), &MultiGodot::_set_mouse_position);
     ClassDB::bind_method(D_METHOD("_set_user_data", "sender", "item", "data"), &MultiGodot::_set_user_data);
     ClassDB::bind_method(D_METHOD("_update_script_different", "path", "remote_code"), &MultiGodot::_update_script_different);
-    ClassDB::bind_method(D_METHOD("_update_script_same", "line", "line_text", "newline", "indent_from_line", "indent_from_column"), &MultiGodot::_update_script_same);
-    ClassDB::bind_method(D_METHOD("_update_script_same_skewed", "from", "contents"), &MultiGodot::_update_script_same_skewed);
+    ClassDB::bind_method(D_METHOD("_update_script_same", "from", "contents"), &MultiGodot::_update_script_same);
     ClassDB::bind_method(D_METHOD("_compare_filesystem", "other_path_list", "host_id"), &MultiGodot::_compare_filesystem);
     ClassDB::bind_method(D_METHOD("_request_file_contents", "client_id"), &MultiGodot::_request_file_contents);
     ClassDB::bind_method(D_METHOD("_receive_file_contents", "path", "contents"), &MultiGodot::_receive_file_contents);
@@ -147,49 +146,9 @@ void MultiGodot::_process() {
 
     _sync_created_deleted_files();
     _sync_scripts();
-    if (ENABLE_SAME_FILE_EDITS) {
-        _sync_live_edits();
-    }
-    else {
-        _sync_live_edits_skewed();
-    }
+    _sync_live_edits();
 
-    ScriptEditor *editor = ScriptEditor::get_singleton();
-    ItemList *script_list = editor->script_list;
-    Vector<int> selected_array;
-
-    for (int i = 0; i < handshake_completed_with.size(); i++) {
-        if (handshake_completed_with[i] == steam_id) {
-            continue;
-        }
-        HashMap<String, Variant> this_user_data = user_data[handshake_completed_with[i]];
-        if (!this_user_data.has("current_script_path")) {
-            continue;
-        }
-        String this_current_script = this_user_data["current_script_path"];
-        if (this_current_script == "") {
-            continue;
-        }
-        Vector<String> split_spaces = this_current_script.split("/");
-        String formatted = split_spaces[split_spaces.size() - 1];
-        for (int j = 0; j < script_list->items.size(); j++) {
-            ItemList::Item item = script_list->items[j];
-            
-            if (item.text.contains(formatted)) {
-                selected_array.append(j);
-            }
-        }
-    }
-
-    for (int i = 0; i < script_list->get_item_count(); i++) {
-        String selected_text = script_list->get_item_text(i);
-        if (selected_array.has(i) && !selected_text.ends_with(" (being edited)")) {
-            script_list->set_item_text(i, selected_text + " (being edited)");
-        }
-        else if (!selected_array.has(i) && selected_text.ends_with(" (being edited)")) {
-            script_list->set_item_text(i, selected_text.split(" (being edited)")[0]);
-        }
-    }
+    _update_editor_menus();
     
     queue_redraw();
 }
@@ -545,7 +504,7 @@ void MultiGodot::_sync_scripts() {
     }
 }
 
-void MultiGodot::_sync_live_edits_skewed() {
+void MultiGodot::_sync_live_edits() {
     CodeEdit *editor = _get_code_editor();
     Ref<Script> current_script = script_editor->_get_current_script();
     if (editor == nullptr || current_script == nullptr) {
@@ -585,86 +544,8 @@ void MultiGodot::_sync_live_edits_skewed() {
             continue;
         }
 
-        _call_func(this, "_update_script_same_skewed", {steam_id, code});
+        _call_func(this, "_update_script_same", {steam_id, code});
     }
-}
-
-void MultiGodot::_sync_live_edits() {
-    // Unfinished method for two people to edit at once. I think for now I'm just going to do
-    // only one person can edit and they "own" the file.
-    CodeEdit *editor = _get_code_editor();
-    Ref<Script> current_script = script_editor->_get_current_script();
-    if (editor == nullptr || current_script == nullptr) {
-        return;
-    }
-
-    int line = editor->get_caret_line();
-    String line_text = editor->get_line(line);
-
-    Vector<int> occupied_lines;
-    for (int i = 0; i < handshake_completed_with.size(); i++) {
-        HashMap<String, Variant> this_data = user_data[handshake_completed_with[i]];
-        if (this_data.has("script_current_line")) {
-            int occupied = this_data.get("script_current_line");
-            editor->set_line_background_color(occupied, LINE_OCCUPIED_BG_COLOR); // Doesn't work
-            occupied_lines.append(occupied);
-        }
-    }
-
-    bool newline = false;
-    if (Input::get_singleton()->is_key_pressed(Key::ENTER) && !editor->is_code_completion_enabled()) {
-        if (!was_enter_pressed) {
-            newline = true;
-        }
-        was_enter_pressed = true;
-    }
-    else {
-        was_enter_pressed = false;
-    }
-
-    // Not the best way to check if a line was just deleted -- what about selections?
-    bool deleted_line = false;
-    if (Input::get_singleton()->is_key_pressed(Key::BACKSPACE) && script_editor_previous_line_text.is_empty() && editor->get_line_count() < script_editor_previous_length) {
-        deleted_line = true;
-    }
-
-    script_editor_previous_length = editor->get_line_count(); // Might need to move this forward in the future...
-
-    if (line != script_editor_previous_line) {
-        if (occupied_lines.has(line) && !newline) {
-            editor->set_caret_line(script_editor_previous_line);
-            return;
-        }
-        script_editor_previous_line = line;
-        script_editor_previous_line_text = line_text;
-        _set_user_data_for_everyone("script_current_line", line);
-        if (!newline && !deleted_line) {
-            return; // A line change isn't a text change, and since the text will be the same, just return.
-        }
-    }
-
-    if (line_text == script_editor_previous_line_text && !newline && !deleted_line) {
-        return;
-    }
-    
-    for (int i = 0; i < handshake_completed_with.size(); i++) {
-        uint64_t this_lobby_member = handshake_completed_with[i];
-        if (this_lobby_member == steam_id) {
-            continue;
-        }
-        HashMap<String, Variant> member_info = user_data.get(this_lobby_member);
-        if (!member_info.has("current_script_path") || !member_info.has("editor_tab_index")) {
-            print_error("Trying to sync a script with a client but they are missing info: either current_script_path or editor_tab_index.");
-            continue;
-        }
-        if ((int)member_info.get("editor_tab_index") != SCRIPT_EDITOR || member_info.get("current_script_path") != (Variant)current_script->get_path()) {
-            continue;
-        }
-        _call_func(this, "_update_script_same", {line, line_text, newline, deleted_line, script_editor_previous_line, script_editor_previous_column});
-    }
-
-    script_editor_previous_line_text = line_text;
-    script_editor_previous_column = editor->get_caret_column();
 }
 
 void MultiGodot::_sync_filesystem() {
@@ -719,6 +600,45 @@ void MultiGodot::_set_user_data_for_everyone(String item, Variant value) {
     _call_func(this, "_set_user_data", {steam_id, item, value});
 }
 
+void MultiGodot::_update_editor_menus() {
+    ScriptEditor *editor = ScriptEditor::get_singleton();
+    ItemList *script_list = editor->script_list;
+    Vector<int> selected_array;
+
+    for (int i = 0; i < handshake_completed_with.size(); i++) {
+        if (handshake_completed_with[i] == steam_id) {
+            continue;
+        }
+        HashMap<String, Variant> this_user_data = user_data[handshake_completed_with[i]];
+        if (!this_user_data.has("current_script_path")) {
+            continue;
+        }
+        String this_current_script = this_user_data["current_script_path"];
+        if (this_current_script == "") {
+            continue;
+        }
+        Vector<String> split_spaces = this_current_script.split("/");
+        String formatted = split_spaces[split_spaces.size() - 1];
+        for (int j = 0; j < script_list->items.size(); j++) {
+            ItemList::Item item = script_list->items[j];
+            
+            if (item.text.contains(formatted)) {
+                selected_array.append(j);
+            }
+        }
+    }
+
+    for (int i = 0; i < script_list->get_item_count(); i++) {
+        String selected_text = script_list->get_item_text(i);
+        if (selected_array.has(i) && !selected_text.ends_with(" (being edited)")) {
+            script_list->set_item_text(i, selected_text + " (being edited)");
+        }
+        else if (!selected_array.has(i) && selected_text.ends_with(" (being edited)")) {
+            script_list->set_item_text(i, selected_text.split(" (being edited)")[0]);
+        }
+    }
+}
+
 // REMOTE CALLABLES
 
 void MultiGodot::_set_mouse_position(uint64_t sender, Vector2 pos) { 
@@ -756,47 +676,7 @@ void MultiGodot::_update_script_different(String path, String remote_code) {
     }
 }
 
-void MultiGodot::_update_script_same(int line, String line_text, bool newline, bool deleted_line, int action_line, int action_column) {
-    CodeEdit *editor = ScriptEditor::get_singleton()->_get_current_editor()->get_code_editor()->get_text_editor();
-    if (editor == nullptr) {
-        return;
-    }
-
-    if (editor->get_caret_line() == line && !newline) {
-        print_error("Another client requested to update a line on the opened script, but we are also on that line.");
-        return;
-    }
-
-    if (newline || deleted_line) {
-        int previous_caret_line = editor->get_caret_line();
-        int previous_caret_column = editor->get_caret_column();
-        editor->set_caret_line(action_line, false);
-        editor->set_caret_column(action_column, false);
-
-        if (newline) {
-            editor->_new_line();
-            if (previous_caret_line >= action_line) {
-                previous_caret_line++;
-            }
-        }
-
-        if (deleted_line) {
-            editor->set_line(action_line, ""); // Technically shouldn't be neccessary but just in case.
-            editor->backspace();
-            if (previous_caret_line > action_line) {
-                previous_caret_line--;
-            }
-        }
-
-        editor->set_caret_line(previous_caret_line, false);
-        editor->set_caret_column(previous_caret_column, false);
-    }
-
-
-    editor->set_line(line, line_text);
-}
-
-void MultiGodot::_update_script_same_skewed(uint64_t from, String contents) {
+void MultiGodot::_update_script_same(uint64_t from, String contents) {
     String this_spectating = user_data[steam_id]["current_spectating_script"];
     String other_editing = user_data[from]["current_script_path"];
     if (this_spectating == "" || this_spectating != other_editing) {
@@ -1094,22 +974,20 @@ void MultiGodot::_on_current_script_path_changed(String path) {
 
     String old_path = user_data[steam_id]["current_script_path"];
     bool already_reset_owner = false;
-    if (!ENABLE_SAME_FILE_EDITS) { // Set script path to empty if someone else is already on it.
-        for (int i = 0; i < steam_ids.size(); i++) {
-            uint64_t this_steam_id = steam_ids[i];
-            if (this_steam_id == steam_id) {
-                continue;
-            }
-            HashMap<String, Variant> this_user_data = user_data[this_steam_id];
-            if ((String)this_user_data["current_script_path"] == path) { // Possibly Variant->String is an unsafe cast?
-                _set_user_data_for_everyone("current_script_path", ""); // Because we are spectating the script it isn't really "our" script.
-                _set_user_data_for_everyone("current_spectating_script", path);
-                return;
-            }
-            else if (!already_reset_owner && (String)this_user_data["current_spectating_script"] == old_path) {
-                already_reset_owner = true;
-                _call_func(this, "_set_as_script_owner", {old_path}, this_steam_id);
-            }
+    for (int i = 0; i < steam_ids.size(); i++) {
+        uint64_t this_steam_id = steam_ids[i];
+        if (this_steam_id == steam_id) {
+            continue;
+        }
+        HashMap<String, Variant> this_user_data = user_data[this_steam_id];
+        if ((String)this_user_data["current_script_path"] == path) { // Possibly Variant->String is an unsafe cast?
+            _set_user_data_for_everyone("current_script_path", ""); // Because we are spectating the script it isn't really "our" script.
+            _set_user_data_for_everyone("current_spectating_script", path);
+            return;
+        }
+        else if (!already_reset_owner && (String)this_user_data["current_spectating_script"] == old_path) {
+            already_reset_owner = true;
+            _call_func(this, "_set_as_script_owner", {old_path}, this_steam_id);
         }
     }
 

@@ -105,7 +105,6 @@ class MultiGodot : public Node2D {
         static const int DEFAULT_CHANNEL = 0;
         static const int PACKET_SIZE_LIMIT = 1200; // bytes
         static const bool VERBOSE_DEBUG = true;
-        static const bool ENABLE_SAME_FILE_EDITS = false;
         static const P2PSend SEND_TYPE = P2P_SEND_UNRELIABLE;
         const Color LINE_OCCUPIED_BG_COLOR = Color::from_rgba8(36, 9, 14, 0.3);
 
@@ -173,19 +172,18 @@ class MultiGodot : public Node2D {
         void _sync_var(Node *node, StringName property, uint64_t custom_target = 0);
         void _call_func(Node *node, String function_name, Array args, uint64_t custom_target = 0);
         void _sync_scripts();
-        void _sync_live_edits_skewed();
         void _sync_live_edits();
         void _sync_filesystem();
         void _sync_created_deleted_files();
         void _set_user_data_for_everyone(String item, Variant value);
+        void _update_editor_menus();
 
         // REMOTE CALLABLES
 
         void _set_mouse_position(uint64_t sender, Vector2 pos);
         void _set_user_data(uint64_t sender, String item, Variant value);
         void _update_script_different(String path, String code);
-        void _update_script_same(int line, String line_text, bool newline, bool deleted_line, int indent_from_line, int indent_from_column);
-        void _update_script_same_skewed(uint64_t from, String contents);
+        void _update_script_same(uint64_t from, String contents);
         void _compare_filesystem(Vector<String> path_list, uint64_t host_id);
         void _request_file_contents(uint64_t client_id);
         void _receive_file_contents(String path, String contents);
