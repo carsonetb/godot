@@ -49,8 +49,6 @@ public:
 		SELECT_MULTI,
 		SELECT_TOGGLE,
 	};
-
-private:
 	struct Item {
 		mutable RID accessibility_item_element;
 		mutable bool accessibility_item_dirty = true;
@@ -90,6 +88,8 @@ private:
 
 		Item(bool p_dummy) {}
 	};
+
+private:
 	RID accessibility_scroll_element;
 
 	static inline PropertyListHelper base_property_helper;
@@ -114,7 +114,6 @@ private:
 
 	bool wraparound_items = true;
 
-	Vector<Item> items;
 	Vector<int> separators;
 
 	SelectMode select_mode = SELECT_SINGLE;
@@ -197,6 +196,9 @@ protected:
 	void _accessibility_action_blur(const Variant &p_data, int p_index);
 
 public:
+
+	Vector<Item> items;
+
 	virtual RID get_focused_accessibility_element() const override;
 
 	virtual void gui_input(const Ref<InputEvent> &p_event) override;

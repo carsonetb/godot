@@ -16,6 +16,7 @@
 #include "scene/main/node.h"
 #include "scene/gui/button.h"
 #include "scene/gui/code_edit.h"
+#include "scene/gui/item_list.h"
 
 MultiGodot::MultiGodot() {}
 
@@ -149,6 +150,39 @@ void MultiGodot::_process() {
     }
     else {
         _sync_live_edits_skewed();
+    }
+
+    ScriptEditor *editor = ScriptEditor::get_singleton();
+    ItemList *script_list = editor->script_list;
+    Vector<int> selected_array;
+
+    for (int i = 0; i < handshake_completed_with.size(); i++) {
+        if (handshake_completed_with[i] == steam_id) {
+            continue;
+        }
+        HashMap<String, Variant> this_user_data = user_data[handshake_completed_with[i]];
+        String this_current_script = this_user_data["current_script_path"];
+        String formatted = this_current_script.split("/")[-1];
+        if (this_current_script == "") {
+            continue;
+        }
+        for (int j = 0; j < script_list->items.size(); j++) {
+            ItemList::Item item = script_list->items[j];
+            
+            if (item.text.contains(formatted)) {
+                selected_array.append(j);
+            }
+        }
+    }
+
+    for (int i = 0; i < script_list->get_item_count(); i++) {
+        String selected_text = script_list->get_item_text(i);
+        if (selected_array.has(i) && !selected_text.ends_with(" (being edited)")) {
+            script_list->set_item_text(i, selected_text + " (being edited)");
+        }
+        else if (!selected_array.has(i) && selected_text.ends_with(" (being edited)")) {
+            script_list->set_item_text(i, selected_text.split(" (being edited)")[0]);
+        }
     }
     
     queue_redraw();

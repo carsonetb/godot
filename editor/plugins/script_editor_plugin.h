@@ -318,7 +318,6 @@ class ScriptEditor : public PanelContainer {
 	bool is_floating = false;
 	EditorHelpSearch *help_search_dialog = nullptr;
 
-	ItemList *script_list = nullptr;
 	HSplitContainer *script_split = nullptr;
 	ItemList *members_overview = nullptr;
 	LineEdit *filter_scripts = nullptr;
@@ -568,6 +567,8 @@ public:
 	ScriptEditorBase *_get_current_editor() const;
 
 	bool is_editor_floating();
+
+	ItemList *script_list = nullptr;
 
 	_FORCE_INLINE_ bool edit(const Ref<Resource> &p_resource, bool p_grab_focus = true) { return edit(p_resource, -1, 0, p_grab_focus); }
 	bool edit(const Ref<Resource> &p_resource, int p_line, int p_col, bool p_grab_focus = true);
