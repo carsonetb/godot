@@ -568,16 +568,16 @@ void MultiGodot::_sync_scenes() {
     }
 
     if ((String)user_data[steam_id]["current_scene_path"] != path) {
-        _set_user_data_for_everyone("current_scene_path", "path");
+        _set_user_data_for_everyone("current_scene_path", path);
     }
 
     Ref<FileAccess> file = FileAccess::open(path, FileAccess::READ);
-    String data = file->get_as_text();
+    String scene_data = file->get_as_text();
     file->close();
-    if (data == last_scene_data) {
+    if (scene_data == last_scene_data) {
         return;
     }
-    last_scene_data = data;
+    last_scene_data = scene_data;
 
     if (VERBOSE_DEBUG) {
         print_line("Detected a change in the scene. Sending to clients.");
@@ -590,7 +590,7 @@ void MultiGodot::_sync_scenes() {
         }
         HashMap<String, Variant> member_info = user_data.get(this_lobby_member);
         if ((String)member_info.get("current_scene_path") != path) {
-            _call_func(this, "_update_scene_different", {path, data}, this_lobby_member);
+            _call_func(this, "_update_scene_different", {path, scene_data}, this_lobby_member);
         }
     }
 }

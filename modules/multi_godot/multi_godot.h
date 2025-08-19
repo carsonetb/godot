@@ -16,7 +16,7 @@ class MultiGodot : public Node2D {
     GDCLASS(MultiGodot, Node2D);
 
     protected:
-        typedef struct Action {
+        struct Action {
             enum ActionType {
                 PROPERTY_EDIT,
                 RECURSIVE_PROPERTY_EDIT,
