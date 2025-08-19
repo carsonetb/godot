@@ -10,7 +10,9 @@
 #include "editor/editor_file_system.h"
 #include "editor/editor_interface.h"
 #include "editor/editor_main_screen.h"
+#include "editor/gui/scene_tree_editor.h"
 #include "editor/plugins/script_editor_plugin.h"
+#include "editor/scene_tree_dock.h"
 #include "modules/godotsteam/godotsteam.h"
 #include "register_types.h"
 #include "scene/main/node.h"
@@ -126,9 +128,10 @@ void MultiGodot::_ready() {
         "editor_tab_index",
         "current_script_path",
         "current_spectating_script",
+        "current_scene_path",
     };
 
-    const Vector<Variant> initial_values = {0, 0, "", ""};
+    const Vector<Variant> initial_values = {0, 0, "", "", ""};
 
     for (int i = 0; i < initial_keys.size(); i++) {
         _set_user_data(steam_id, initial_keys[i], initial_values[i]);
@@ -137,6 +140,10 @@ void MultiGodot::_ready() {
 
 void MultiGodot::_process() {
     steam->run_callbacks();
+
+    if (!is_lobby_joined) {
+        return;
+    }
 
     if (lobby_id > 0) {
         _read_all_p2p_packets(0);
@@ -147,6 +154,8 @@ void MultiGodot::_process() {
     _sync_created_deleted_files();
     _sync_scripts();
     _sync_live_edits();
+
+    _sync_scenes();
 
     _update_editor_menus();
     
@@ -487,7 +496,9 @@ void MultiGodot::_sync_scripts() {
         return;
     } 
 
-    print_line("Detected a change in a script ... syncing to clients.");
+    if (VERBOSE_DEBUG) {
+        print_line("Detected a change in a script ... syncing to clients.");
+    }
 
     for (int i = 0; i < handshake_completed_with.size(); i++) {
         uint64_t this_lobby_member = handshake_completed_with[i];
@@ -495,10 +506,7 @@ void MultiGodot::_sync_scripts() {
             continue;
         }
         HashMap<String, Variant> member_info = user_data.get(this_lobby_member);
-        if (!member_info.has("current_script_path") || !member_info.has("editor_tab_index")) {
-            print_error("Trying to sync a script with a client but they are missing info: either current_script_path or editor_tab_index.");
-        }
-        else if ((int)member_info.get("editor_tab_index") != SCRIPT_EDITOR || member_info.get("current_script_path") != (Variant)path) {
+        if ((int)member_info.get("editor_tab_index") != SCRIPT_EDITOR || member_info.get("current_script_path") != (Variant)path) {
             _call_func(this, "_update_script_different", {path, current_code}, this_lobby_member);
         }
     }
@@ -545,6 +553,45 @@ void MultiGodot::_sync_live_edits() {
         }
 
         _call_func(this, "_update_script_same", {steam_id, code});
+    }
+}
+
+void MultiGodot::_sync_scenes() {
+    // If neccesary for reference later
+    // SceneTreeEditor *scene_tree_editor = SceneTreeDock::get_singleton()->get_tree_editor();    if (scene_tree_editor == nullptr) return;
+    // Node *selected = scene_tree_editor->get_selected();
+
+    EditorData &editor_data = EditorNode::get_singleton()->get_editor_data();
+    String path = editor_data.get_scene_path(editor_data.get_edited_scene());
+    if (path == "") {
+        return;
+    }
+
+    if ((String)user_data[steam_id]["current_scene_path"] != path) {
+        _set_user_data_for_everyone("current_scene_path", "path");
+    }
+
+    Ref<FileAccess> file = FileAccess::open(path, FileAccess::READ);
+    String data = file->get_as_text();
+    file->close();
+    if (data == last_scene_data) {
+        return;
+    }
+    last_scene_data = data;
+
+    if (VERBOSE_DEBUG) {
+        print_line("Detected a change in the scene. Sending to clients.");
+    }
+
+    for (int i = 0; i < handshake_completed_with.size(); i++) {
+        uint64_t this_lobby_member = handshake_completed_with[i];
+        if (this_lobby_member == steam_id) { 
+            continue;
+        }
+        HashMap<String, Variant> member_info = user_data.get(this_lobby_member);
+        if ((String)member_info.get("current_scene_path") != path) {
+            _call_func(this, "_update_scene_different", {path, data}, this_lobby_member);
+        }
     }
 }
 
@@ -663,15 +710,13 @@ void MultiGodot::_update_script_different(String path, String remote_code) {
 
     Ref<Script> current_script = script_editor->_get_current_script();
     HashMap<String, Variant> this_data = user_data.get(steam_id);
-    if (!this_data.has("editor_tab_index")) {
-        print_error("Missing data required to know if _update_script_different call is valid: editor_tab_index");
-    }
-    else if (unlikely(current_script != nullptr && current_script->get_path() == path && (int)this_data.get("editor_tab_index") == SCRIPT_EDITOR)) {
+    if (unlikely(current_script != nullptr && current_script->get_path() == path && (int)this_data.get("editor_tab_index") == SCRIPT_EDITOR)) {
         print_error("Tried to save a script that was supposedly different from the current one but actually isn't.");
     }
     else {
         Ref<FileAccess> file = FileAccess::open(path, FileAccess::WRITE);
         file->store_string(remote_code);
+        file->close();
         script_editor->reload_scripts();
     }
 }
@@ -695,6 +740,16 @@ void MultiGodot::_update_script_same(uint64_t from, String contents) {
     editor->set_caret_line(last_caret_line);
     editor->set_caret_column(last_caret_column);
     live_last_code = contents;
+}
+
+void MultiGodot::_update_scene_different(String path, String remote_data) {
+    if (VERBOSE_DEBUG) {
+        print_line("A client requested to update scene at path " + path);
+    }
+
+    Ref<FileAccess> file = FileAccess::open(path, FileAccess::WRITE);
+    file->store_string(remote_data);
+    file->close();
 }
 
 void MultiGodot::_compare_filesystem(Vector<String> other_path_list, uint64_t host_id) {
@@ -856,6 +911,8 @@ void MultiGodot::_on_lobby_created(int connect, uint64_t this_lobby_id) {
         steam->setLobbyData(lobby_id, "name", this_project_name);
         steam->setLobbyData(lobby_id, "mode", "MultiGodotProject");
         steam->allowP2PPacketRelay(true);
+
+        is_lobby_joined = true;
     }
 }
 
@@ -890,6 +947,8 @@ void MultiGodot::_on_lobby_joined(uint64_t this_lobby_id, int _permissions, bool
 
         _get_lobby_members();
         _make_p2p_handshake();
+
+        is_lobby_joined = true;
     }
     else {
         String fail_reason;

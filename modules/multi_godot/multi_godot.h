@@ -16,88 +16,28 @@ class MultiGodot : public Node2D {
     GDCLASS(MultiGodot, Node2D);
 
     protected:
+        typedef struct Action {
+            enum ActionType {
+                PROPERTY_EDIT,
+                RECURSIVE_PROPERTY_EDIT,
+                RENAME_NODE,
+                MOVE_NODE,
+            };
+
+            ActionType type;
+            NodePath node_path;
+            NodePath new_path; // Only used for move
+            String new_name; // Only used for rename
+            String property_path; // Could be recursive for example: 'resource/color' or just: 'position'
+            Variant old_value;
+            Variant new_value;
+        };
+
         enum RemoteMainScreenStatus {
             VIEWPORT_2D,
             VIEWPORT_3D,
             SCRIPT_EDITOR,
             MS_OTHER,
-        };
-
-        enum RemoteSidePanelStatus {
-            INSPECTOR,
-            NODE,
-            HISTORY,
-        };
-
-        enum RemoteProjectSettingsStatus {
-            PS_GENERAL,
-            INPUT_MAP,
-            LOCALIZATION,
-            GLOBALS,
-            PLUGINS,
-            IMPORT_DEFAULTS,
-        };
-
-        enum RemoteProjectSettingsGeneralStatus {
-            CONFIG,
-            RUN,
-            BOOT_SPLASH,
-            GENERAL,
-            WINDOW,
-            MOUSE_CURSOR,
-            BUSES,
-            RENDERING,
-            LOCALE,
-            COMMON,
-            FONTS,
-            THEME,
-            TEXTURES,
-            RENDERER,
-            VIEWPORT,
-            ANTI_ALIASING,
-            ENVIRONMENT,
-            RENDERING_2D,
-            POINTING,
-            SENSORS,
-            PHYSICS_COMMON,
-            PHYSICS_2D,
-            PHYSICS_3D,
-            OPENXR,
-            SHADERS,
-            MOVIE_WRITER,
-            INITIALIZATION,
-            NAVIGATION_3D,
-            NAVIGATION_2D,
-            RENDER_2D,
-            RENDER_3D,
-            LAYER_NAMES_PHYSICS_2D,
-            LAYER_NAMES_NAVIGATION_2D,
-            LATER_NAMES_3D,
-            IMPORT,
-        };
-
-        enum RemoteProjectSettingsLocalizationStatus {
-            TRANSLATIONS,
-            REMAPS,
-            POT_GENERATION,
-        };
-
-        enum RemoteProjectSettingsGlobalsStatus {
-            AUTOLOAD,
-            SHADER_GLOBALS,
-            GROUPS,
-        };
-
-        enum RemoteSceneViewStatus {
-            SCENE,
-            SV_IMPORT,
-        };
-
-        enum RemoteTabStatus {
-            AUDIO,
-            ANIMATION,
-            SHADER_EDITOR,
-            TS_OTHER,
         };
 
         static const int PACKET_READ_LIMIT = 32;
@@ -110,10 +50,10 @@ class MultiGodot : public Node2D {
 
         // NODES
 
-        Steam *steam;
-        ButtonNotifier *button_notifier;
-        ScriptEditor *script_editor;
-        EditorNode *editor_node_singleton;
+        Steam *steam = nullptr;
+        ButtonNotifier *button_notifier = nullptr;
+        ScriptEditor *script_editor = nullptr;
+        EditorNode *editor_node_singleton = nullptr;
 
         // PROPERTIES
 
@@ -125,12 +65,13 @@ class MultiGodot : public Node2D {
         bool is_lobby_owner = false;
         bool printed = false;
         bool stop_filesystem_scanner = false;
-        bool was_enter_pressed = false;
         bool is_script_owner = false;
+        bool is_lobby_joined = false;
         String this_project_name;
         String last_code;
         String live_last_code;
         String script_editor_previous_line_text;
+        String last_scene_data;
         Vector<HashMap<String, Variant>> lobby_members;
         Vector<String> new_files;
         Vector<String> deleted_files; // Both this and new_files will fill up if not cleaned up by the main thread.
@@ -140,8 +81,9 @@ class MultiGodot : public Node2D {
 
         // REMOTE PROPERTIES
 
-        HashMap<uint64_t, Vector2> mouse_positions;
         HashMap<uint64_t, HashMap<String, Variant>> user_data;
+        HashMap<uint64_t, Vector2> mouse_positions; // Frankly this is unnecessary and should be removed or integrated into user_data
+        HashMap<uint64_t, Vector<Action>> user_undo_stacks; // Unfortunately Vector<Action> isn't a Variant type so it can't be user_data.
         Vector<uint64_t> handshake_completed_with;
 
         // BUILTINS
@@ -173,6 +115,7 @@ class MultiGodot : public Node2D {
         void _call_func(Node *node, String function_name, Array args, uint64_t custom_target = 0);
         void _sync_scripts();
         void _sync_live_edits();
+        void _sync_scenes();
         void _sync_filesystem();
         void _sync_created_deleted_files();
         void _set_user_data_for_everyone(String item, Variant value);
@@ -184,6 +127,7 @@ class MultiGodot : public Node2D {
         void _set_user_data(uint64_t sender, String item, Variant value);
         void _update_script_different(String path, String code);
         void _update_script_same(uint64_t from, String contents);
+        void _update_scene_different(String path, String data);
         void _compare_filesystem(Vector<String> path_list, uint64_t host_id);
         void _request_file_contents(uint64_t client_id);
         void _receive_file_contents(String path, String contents);
