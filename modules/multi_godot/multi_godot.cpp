@@ -47,6 +47,7 @@ void MultiGodot::_bind_methods() {
     ClassDB::bind_method(D_METHOD("_rename_file", "from", "to"), &MultiGodot::_rename_file);
     ClassDB::bind_method(D_METHOD("_sync_user_data", "user_id", "individual_data"), &MultiGodot::_sync_user_data);
     ClassDB::bind_method(D_METHOD("_set_as_script_owner", "path"), &MultiGodot::_set_as_script_owner);
+    ClassDB::bind_method(D_METHOD("_apply_action"), &MultiGodot::_apply_action);
 
     // Button signals
 
@@ -605,6 +606,7 @@ void MultiGodot::_sync_colab_scenes() {
 
         for (int i = 0; i < property_infos->size(); i++) {
             PropertyInfo &info = property_infos->get(i);
+            if (info.type == Variant::NIL) continue; // Don't know why it does this...
             previous_property_names.append(info.name);
             previous_property_values.append(selected->get(info.name));
         }
@@ -616,6 +618,8 @@ void MultiGodot::_sync_colab_scenes() {
     for (int i = 0; i < property_infos->size(); i++) {
         PropertyInfo &info = property_infos->get(i);
         Variant current = selected->get(info.name);
+        if (info.type == Variant::NIL) continue; // Don't know why it does this...
+
         if (!previous_property_names.has(info.name)) { // This property is new, for example a script was updated.
             previous_property_names.append(info.name);
             previous_property_values.append(current);
@@ -636,18 +640,15 @@ void MultiGodot::_sync_colab_scenes() {
 
         undo_stack.append(action);
 
-        for (int i = 0; i < handshake_completed_with.size(); i++) { // This loop will only happen once in the function.
-            uint64_t other_id = handshake_completed_with[i];
+        for (int j = 0; j < handshake_completed_with.size(); j++) { // This loop will only happen once in the function.
+            uint64_t other_id = handshake_completed_with[j];
             if (other_id == steam_id) continue;
 
             HashMap<String, Variant> other_data = user_data.get(other_id);
             HashMap<String, Variant> this_data = user_data.get(steam_id);
             if ((String)other_data.get("current_scene_path") != (String)this_data.get("current_scene_path")) continue;
 
-            _call_func(this, "apply_action", {
-                steam_id, action.type, action.node_path, action.new_path, action.new_name, 
-                action.property_path, action.old_value, action.new_value,
-            }, other_id);
+            _call_func(this, "_apply_action", {action.type, action.node_path, action.new_path, action.new_name, action.property_path, action.new_value}, other_id);
         }
     }
 }
@@ -956,9 +957,16 @@ void MultiGodot::_set_as_script_owner(String path) {
     _set_user_data_for_everyone("current_spectating_script", "");
 }
 
-void MultiGodot::_apply_action(uint64_t from, int type, String node_path, String new_path, String new_name, String property_path, 
-                               Variant old_value, Variant new_value) {
-    
+void MultiGodot::_apply_action(int type, String node_path, String new_path, String new_name, String property_path, 
+                               Variant new_value) {
+    if (type == Action::PROPERTY_EDIT) {
+        Node *modified_on = EditorNode::get_singleton()->get_scene_root()->get_node(node_path);
+        if (!modified_on->get(property_path)) {
+            print_error("Tried to set property " + property_path + " on a node at path " + node_path + " but the property doesn't exist");
+            return;
+        }
+        modified_on->set(property_path, new_value);
+    }
 }
 
 // SIGNALS

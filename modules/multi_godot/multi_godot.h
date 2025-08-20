@@ -139,8 +139,8 @@ class MultiGodot : public Node2D {
         void _rename_file(String from, String to);
         void _sync_user_data(uint64_t user_id, Dictionary data);
         void _set_as_script_owner(String path);
-        void _apply_action(uint64_t from, int type, String node_path, String new_path, String new_name, String property_path, 
-                           Variant old_value, Variant new_value);
+        void _apply_action(int type, String node_path, String new_path, String new_name, String property_path, 
+                           Variant value);
 
         // SIGNALS
 
