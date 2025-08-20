@@ -157,6 +157,7 @@ void MultiGodot::_process() {
     _sync_live_edits();
 
     _sync_scenes();
+    _sync_colab_scenes();
 
     _update_editor_menus();
     
@@ -558,10 +559,6 @@ void MultiGodot::_sync_live_edits() {
 }
 
 void MultiGodot::_sync_scenes() {
-    // If neccesary for reference later
-    // SceneTreeEditor *scene_tree_editor = SceneTreeDock::get_singleton()->get_tree_editor();    if (scene_tree_editor == nullptr) return;
-    // Node *selected = scene_tree_editor->get_selected();
-
     EditorData &editor_data = EditorNode::get_singleton()->get_editor_data();
     String path = editor_data.get_scene_path(editor_data.get_edited_scene());
     if (path == "") {
@@ -592,6 +589,65 @@ void MultiGodot::_sync_scenes() {
         HashMap<String, Variant> member_info = user_data.get(this_lobby_member);
         if ((String)member_info.get("current_scene_path") != path) {
             _call_func(this, "_update_scene_different", {path, scene_data}, this_lobby_member);
+        }
+    }
+}
+
+void MultiGodot::_sync_colab_scenes() {
+    SceneTreeEditor *scene_tree_editor = SceneTreeDock::get_singleton()->get_tree_editor();    if (scene_tree_editor == nullptr) return;
+    Node *selected = scene_tree_editor->get_selected();                                        if (selected == nullptr) return;
+
+    List<PropertyInfo> *property_infos = memnew(List<PropertyInfo>);
+    selected->get_property_list(property_infos);
+
+    if (selected != previous_selected_node) {
+        previous_property_values.clear();
+
+        for (int i = 0; i < property_infos->size(); i++) {
+            PropertyInfo &info = property_infos->get(i);
+            previous_property_names.append(info.name);
+            previous_property_values.append(selected->get(info.name));
+        }
+
+        previous_selected_node = selected;
+        return;
+    }
+
+    for (int i = 0; i < property_infos->size(); i++) {
+        PropertyInfo &info = property_infos->get(i);
+        Variant current = selected->get(info.name);
+        if (!previous_property_names.has(info.name)) { // This property is new, for example a script was updated.
+            previous_property_names.append(info.name);
+            previous_property_values.append(current);
+            continue;
+        }
+
+        Variant previous = previous_property_values.get(previous_property_names.find(info.name));
+        if (previous == current) {
+            continue;
+        }
+
+        Action action;
+        action.type = Action::PROPERTY_EDIT;
+        action.node_path = selected->get_path();
+        action.property_path = info.name;
+        action.old_value = previous;
+        action.new_value = current;
+
+        undo_stack.append(action);
+
+        for (int i = 0; i < handshake_completed_with.size(); i++) { // This loop will only happen once in the function.
+            uint64_t other_id = handshake_completed_with[i];
+            if (other_id == steam_id) continue;
+
+            HashMap<String, Variant> other_data = user_data.get(other_id);
+            HashMap<String, Variant> this_data = user_data.get(steam_id);
+            if ((String)other_data.get("current_scene_path") != (String)this_data.get("current_scene_path")) continue;
+
+            _call_func(this, "apply_action", {
+                steam_id, action.type, action.node_path, action.new_path, action.new_name, 
+                action.property_path, action.old_value, action.new_value,
+            }, other_id);
         }
     }
 }
@@ -751,6 +807,7 @@ void MultiGodot::_update_scene_different(String path, String remote_data) {
     Ref<FileAccess> file = FileAccess::open(path, FileAccess::WRITE);
     file->store_string(remote_data);
     file->close();
+    EditorNode::get_singleton()->reload_scene(path);
 }
 
 void MultiGodot::_compare_filesystem(Vector<String> other_path_list, uint64_t host_id) {
@@ -897,6 +954,11 @@ void MultiGodot::_rename_file(String from, String to) {
 void MultiGodot::_set_as_script_owner(String path) {
     _set_user_data_for_everyone("current_script_path", path);
     _set_user_data_for_everyone("current_spectating_script", "");
+}
+
+void MultiGodot::_apply_action(uint64_t from, int type, String node_path, String new_path, String new_name, String property_path, 
+                               Variant old_value, Variant new_value) {
+    
 }
 
 // SIGNALS

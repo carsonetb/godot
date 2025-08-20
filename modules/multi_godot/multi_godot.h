@@ -16,22 +16,22 @@ class MultiGodot : public Node2D {
     GDCLASS(MultiGodot, Node2D);
 
     protected:
-        struct Action {
+        typedef struct Action {
             enum ActionType {
-                PROPERTY_EDIT,
+                PROPERTY_EDIT = 0,
                 RECURSIVE_PROPERTY_EDIT,
                 RENAME_NODE,
                 MOVE_NODE,
             };
 
-            ActionType type;
+            int type;
             NodePath node_path;
             NodePath new_path; // Only used for move
             String new_name; // Only used for rename
             String property_path; // Could be recursive for example: 'resource/color' or just: 'position'
             Variant old_value;
             Variant new_value;
-        };
+        } Action;
 
         enum RemoteMainScreenStatus {
             VIEWPORT_2D,
@@ -54,6 +54,7 @@ class MultiGodot : public Node2D {
         ButtonNotifier *button_notifier = nullptr;
         ScriptEditor *script_editor = nullptr;
         EditorNode *editor_node_singleton = nullptr;
+        Node *previous_selected_node = nullptr;
 
         // PROPERTIES
 
@@ -75,7 +76,10 @@ class MultiGodot : public Node2D {
         Vector<HashMap<String, Variant>> lobby_members;
         Vector<String> new_files;
         Vector<String> deleted_files; // Both this and new_files will fill up if not cleaned up by the main thread.
+        Vector<String> previous_property_names;
+        Vector<Variant> previous_property_values;
         Vector<uint64_t> steam_ids;
+        Vector<Action> undo_stack;
         Thread filesystem_scanner;
         Mutex mutex;
 
@@ -83,7 +87,6 @@ class MultiGodot : public Node2D {
 
         HashMap<uint64_t, HashMap<String, Variant>> user_data;
         HashMap<uint64_t, Vector2> mouse_positions; // Frankly this is unnecessary and should be removed or integrated into user_data
-        HashMap<uint64_t, Vector<Action>> user_undo_stacks; // Unfortunately Vector<Action> isn't a Variant type so it can't be user_data.
         Vector<uint64_t> handshake_completed_with;
 
         // BUILTINS
@@ -116,6 +119,7 @@ class MultiGodot : public Node2D {
         void _sync_scripts();
         void _sync_live_edits();
         void _sync_scenes();
+        void _sync_colab_scenes();
         void _sync_filesystem();
         void _sync_created_deleted_files();
         void _set_user_data_for_everyone(String item, Variant value);
@@ -135,6 +139,8 @@ class MultiGodot : public Node2D {
         void _rename_file(String from, String to);
         void _sync_user_data(uint64_t user_id, Dictionary data);
         void _set_as_script_owner(String path);
+        void _apply_action(uint64_t from, int type, String node_path, String new_path, String new_name, String property_path, 
+                           Variant old_value, Variant new_value);
 
         // SIGNALS
 
