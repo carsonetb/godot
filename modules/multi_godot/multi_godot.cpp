@@ -631,7 +631,8 @@ void MultiGodot::_sync_colab_scenes() {
             continue;
         }
 
-        Variant previous = previous_property_values.get(previous_property_names.find(info.name));
+        int index = previous_property_names.find(info.name);
+        Variant previous = previous_property_values.get(index);
         if (previous == current) {
             continue;
         }
@@ -656,6 +657,8 @@ void MultiGodot::_sync_colab_scenes() {
 
             _call_func(this, "_apply_action", {action.type, action.node_path, action.new_path, action.new_name, action.property_path, action.new_value}, other_id);
         }
+
+        previous_property_values.set(index, current);
     }
 }
 
@@ -967,7 +970,7 @@ void MultiGodot::_apply_action(int type, String node_path, String new_path, Stri
                                Variant new_value) {
     if (type == Action::PROPERTY_EDIT) {
         Node *modified_on = EditorNode::get_singleton()->get_edited_scene()->get_node(node_path);
-        if (!modified_on->get(property_path)) {
+        if (modified_on->get_static_property_type(property_path) == Variant::NIL) {
             print_error("Tried to set property " + property_path + " on a node at path " + node_path + " but the property doesn't exist");
             return;
         }
