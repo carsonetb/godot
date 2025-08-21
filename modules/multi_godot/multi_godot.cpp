@@ -619,9 +619,9 @@ void MultiGodot::_sync_colab_scenes() {
     _recurse_node_parameters(root, selected, root->get_path_to(selected));
 }
 
-void MultiGodot::_recurse_initiate(Object *selected, String base_path) {
+void MultiGodot::_recurse_initiate(Object *obj, String base_path) {
     List<PropertyInfo> *property_infos = memnew(List<PropertyInfo>);
-    selected->get_property_list(property_infos);
+    obj->get_property_list(property_infos);
 
     List<PropertyInfo>::Element *current = property_infos->front();
     for (int i = 0; i < property_infos->size() - 1; i++) {
@@ -630,7 +630,7 @@ void MultiGodot::_recurse_initiate(Object *selected, String base_path) {
         if (info.type == Variant::NIL || info.name == "owner") continue; // Don't know why it does this...
 
         String this_path = base_path + "/" + info.name;
-        Variant value = selected->get(info.name);
+        Variant value = obj->get(info.name);
 
         if (value.get_type() == Variant::OBJECT) {
             Object *obj = value.operator Object *();
@@ -647,18 +647,18 @@ void MultiGodot::_recurse_initiate(Object *selected, String base_path) {
     }
 }
 
-void MultiGodot::_recurse_node_parameters(Node *root, Object *selected, String selected_node_path, String modified_param_path) {
+void MultiGodot::_recurse_node_parameters(Node *root, Object *obj, String selected_node_path, String modified_param_path) {
     List<PropertyInfo> *property_infos = memnew(List<PropertyInfo>);
-    selected->get_property_list(property_infos);
+    obj->get_property_list(property_infos);
 
-    List<PropertyInfo>::Element *current = property_infos->front();
+    List<PropertyInfo>::Element *element = property_infos->front();
     for (int i = 0; i < property_infos->size() - 1; i++) {
-        current = current->next(); // No one cares about the first one anyway.
-        PropertyInfo &info = current->get();
+        element = element->next(); // No one cares about the first one anyway.
+        PropertyInfo &info = element->get();
         if (info.type == Variant::NIL || info.name == "owner") continue; // Don't know why it does this...
 
         String this_param_path = modified_param_path + "/" + info.name;
-        Variant current = selected->get(info.name);
+        Variant current = obj->get(info.name);
 
         // This property is new, for example a script was updated
         if (!previous_property_names.has(this_param_path)) {
@@ -1029,15 +1029,16 @@ void MultiGodot::_apply_action(int type, String node_path, String new_path, Stri
                                Variant new_value) {
     if (type == Action::PROPERTY_EDIT) {
         Object *modified_on = EditorNode::get_singleton()->get_edited_scene()->get_node(node_path);
-        if (modified_on->get_static_property_type(property_path) == Variant::NIL) {
-            print_error("Tried to set property " + property_path + " on a node at path " + node_path + " but the property doesn't exist");
-            return;
-        }
 
         Vector<String> split_slashes = property_path.split("/");
         for (int i = 0; i < split_slashes.size(); i++) {
             String property = split_slashes[i];
             if (property == "") continue;
+
+            if (modified_on->get_static_property_type(property) == Variant::NIL) {
+                print_error("Tried to set property " + property_path + " on a node at path " + node_path + " but the property doesn't exist (property name " + property + ")");
+                return;
+            }
 
             if (i == split_slashes.size() - 1) {
                 modified_on->set(property, new_value);
