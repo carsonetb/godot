@@ -588,6 +588,9 @@ void MultiGodot::_sync_scenes() {
             continue;
         }
         HashMap<String, Variant> member_info = user_data.get(this_lobby_member);
+        if (!member_info.has("current_scene_path")) {
+            continue;
+        }
         if ((String)member_info.get("current_scene_path") != path) {
             _call_func(this, "_update_scene_different", {path, scene_data}, this_lobby_member);
         }
@@ -602,6 +605,7 @@ void MultiGodot::_sync_colab_scenes() {
     selected->get_property_list(property_infos);
 
     if (selected != previous_selected_node) {
+        previous_property_names.clear();
         previous_property_values.clear();
 
         for (int i = 0; i < property_infos->size(); i++) {
@@ -646,6 +650,7 @@ void MultiGodot::_sync_colab_scenes() {
 
             HashMap<String, Variant> other_data = user_data.get(other_id);
             HashMap<String, Variant> this_data = user_data.get(steam_id);
+            if (!other_data.has("current_scene_path")) continue;
             if ((String)other_data.get("current_scene_path") != (String)this_data.get("current_scene_path")) continue;
 
             _call_func(this, "_apply_action", {action.type, action.node_path, action.new_path, action.new_name, action.property_path, action.new_value}, other_id);
@@ -752,7 +757,7 @@ void MultiGodot::_set_mouse_position(uint64_t sender, Vector2 pos) {
 
 void MultiGodot::_set_user_data(uint64_t sender, String item, Variant value) {
     if (VERBOSE_DEBUG) {
-        print_line("User data set: " + item + " set to " + (String)value);
+        print_line("User data set: " + item + " set to " + (String)value + " by user " + steam->getFriendPersonaName(sender));
     }
     if (unlikely(!user_data.has(sender))) {
         print_error("A sender somehow isn't in the user_data hashmap.");
@@ -966,6 +971,16 @@ void MultiGodot::_apply_action(int type, String node_path, String new_path, Stri
             return;
         }
         modified_on->set(property_path, new_value);
+        
+        int index = previous_property_names.find(property_path);
+        if (index == -1) {
+            print_error("Remote requested to change a property that we aren't aware of (" + property_path + ")");
+            previous_property_names.append(property_path);
+            previous_property_values.append(new_value);
+            return;
+        }
+
+        previous_property_values.set(index, new_value);
     }
 }
 
