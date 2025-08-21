@@ -48,6 +48,7 @@ void MultiGodot::_bind_methods() {
     ClassDB::bind_method(D_METHOD("_sync_user_data", "user_id", "individual_data"), &MultiGodot::_sync_user_data);
     ClassDB::bind_method(D_METHOD("_set_as_script_owner", "path"), &MultiGodot::_set_as_script_owner);
     ClassDB::bind_method(D_METHOD("_apply_action"), &MultiGodot::_apply_action);
+    ClassDB::bind_method(D_METHOD("_instantiate_resource", "node_path", "resource_path", "type"), &MultiGodot::_instantiate_resource);
 
     // Button signals
 
@@ -599,7 +600,7 @@ void MultiGodot::_sync_scenes() {
 
 void MultiGodot::_sync_colab_scenes() {
     SceneTreeEditor *scene_tree_editor = SceneTreeDock::get_singleton()->get_tree_editor();    if (scene_tree_editor == nullptr) return;
-    Node *selected = scene_tree_editor->get_selected();                                        if (selected == nullptr) return;
+    selected = scene_tree_editor->get_selected();                                              if (selected == nullptr) return;
     Node *root = EditorNode::get_singleton()->get_edited_scene();
 
     List<PropertyInfo> *property_infos = memnew(List<PropertyInfo>);
@@ -609,38 +610,98 @@ void MultiGodot::_sync_colab_scenes() {
         previous_property_names.clear();
         previous_property_values.clear();
 
-        for (int i = 0; i < property_infos->size(); i++) {
-            PropertyInfo &info = property_infos->get(i);
-            if (info.type == Variant::NIL) continue; // Don't know why it does this...
-            previous_property_names.append(info.name);
-            previous_property_values.append(selected->get(info.name));
-        }
+        _recurse_initiate(selected);
 
         previous_selected_node = selected;
         return;
     }
 
-    for (int i = 0; i < property_infos->size(); i++) {
-        PropertyInfo &info = property_infos->get(i);
-        Variant current = selected->get(info.name);
-        if (info.type == Variant::NIL) continue; // Don't know why it does this...
+    _recurse_node_parameters(root, selected, root->get_path_to(selected));
+}
 
-        if (!previous_property_names.has(info.name)) { // This property is new, for example a script was updated.
-            previous_property_names.append(info.name);
+void MultiGodot::_recurse_initiate(Object *selected, String base_path) {
+    List<PropertyInfo> *property_infos = memnew(List<PropertyInfo>);
+    selected->get_property_list(property_infos);
+
+    List<PropertyInfo>::Element *current = property_infos->front();
+    for (int i = 0; i < property_infos->size() - 1; i++) {
+        current = current->next(); // No one cares about the first one anyway.
+        PropertyInfo &info = current->get();
+        if (info.type == Variant::NIL || info.name == "owner") continue; // Don't know why it does this...
+
+        String this_path = base_path + "/" + info.name;
+        Variant value = selected->get(info.name);
+
+        if (value.get_type() == Variant::OBJECT) {
+            Object *obj = value.operator Object *();
+            if (obj) {
+                _recurse_initiate(obj, this_path);
+            }
+            else {
+                value = false;
+            }
+        }
+
+        previous_property_names.append(this_path);
+        previous_property_values.append(value);
+    }
+}
+
+void MultiGodot::_recurse_node_parameters(Node *root, Object *selected, String selected_node_path, String modified_param_path) {
+    List<PropertyInfo> *property_infos = memnew(List<PropertyInfo>);
+    selected->get_property_list(property_infos);
+
+    List<PropertyInfo>::Element *current = property_infos->front();
+    for (int i = 0; i < property_infos->size() - 1; i++) {
+        current = current->next(); // No one cares about the first one anyway.
+        PropertyInfo &info = current->get();
+        if (info.type == Variant::NIL || info.name == "owner") continue; // Don't know why it does this...
+
+        String this_param_path = modified_param_path + "/" + info.name;
+        Variant current = selected->get(info.name);
+
+        // This property is new, for example a script was updated
+        if (!previous_property_names.has(this_param_path)) {
+            previous_property_names.append(this_param_path);
             previous_property_values.append(current);
             continue;
         }
 
-        int index = previous_property_names.find(info.name);
+        int index = previous_property_names.find(this_param_path);
         Variant previous = previous_property_values.get(index);
+
+        if (current.get_type() == Variant::OBJECT) { // Pointer type, can't be sent over interwebz!
+            Object *obj = current.operator Object *();
+            if (!previous && obj) {
+                print_line("Resource created at path " + this_param_path);
+                _recurse_initiate(obj, this_param_path);
+                _call_func(this, "_instantiate_resource", {selected_node_path, this_param_path, obj->get_class()});
+                previous_property_values.set(index, current);
+                continue;
+            }
+            if (obj) {
+                _recurse_node_parameters(root, obj, selected_node_path, this_param_path);
+                previous_property_values.set(index, current);
+                continue;
+            }
+            else {
+                current = false;
+            }
+        }
+
         if (previous == current) {
             continue;
+        }
+        previous_property_values.set(index, current);
+
+        if (VERBOSE_DEBUG) {
+            print_line("Property modified at path " + this_param_path);
         }
 
         Action action;
         action.type = Action::PROPERTY_EDIT;
-        action.node_path = root->get_path_to(selected);
-        action.property_path = info.name;
+        action.node_path = selected_node_path;
+        action.property_path = this_param_path;
         action.old_value = previous;
         action.new_value = current;
 
@@ -657,8 +718,6 @@ void MultiGodot::_sync_colab_scenes() {
 
             _call_func(this, "_apply_action", {action.type, action.node_path, action.new_path, action.new_name, action.property_path, action.new_value}, other_id);
         }
-
-        previous_property_values.set(index, current);
     }
 }
 
@@ -969,12 +1028,30 @@ void MultiGodot::_set_as_script_owner(String path) {
 void MultiGodot::_apply_action(int type, String node_path, String new_path, String new_name, String property_path, 
                                Variant new_value) {
     if (type == Action::PROPERTY_EDIT) {
-        Node *modified_on = EditorNode::get_singleton()->get_edited_scene()->get_node(node_path);
+        Object *modified_on = EditorNode::get_singleton()->get_edited_scene()->get_node(node_path);
         if (modified_on->get_static_property_type(property_path) == Variant::NIL) {
             print_error("Tried to set property " + property_path + " on a node at path " + node_path + " but the property doesn't exist");
             return;
         }
-        modified_on->set(property_path, new_value);
+
+        Vector<String> split_slashes = property_path.split("/");
+        for (int i = 0; i < split_slashes.size(); i++) {
+            String property = split_slashes[i];
+            if (property == "") continue;
+
+            if (i == split_slashes.size() - 1) {
+                modified_on->set(property, new_value);
+            }
+            else {
+                modified_on = modified_on->get(property);
+                if (!modified_on) {
+                    print_error("Remote requested to change a property at path " + property_path + " but couldn't resolve path.");
+                    return;
+                }
+            }
+        }
+
+        if (modified_on != selected) return;
         
         int index = previous_property_names.find(property_path);
         if (index == -1) {
@@ -986,6 +1063,38 @@ void MultiGodot::_apply_action(int type, String node_path, String new_path, Stri
 
         previous_property_values.set(index, new_value);
     }
+}
+
+void MultiGodot::_instantiate_resource(String node_path, String resource_path, String type) {
+    Object *modified_on = EditorNode::get_singleton()->get_edited_scene()->get_node(node_path);
+
+    Vector<String> split_slashes = resource_path.split("/");
+    for (int i = 0; i < split_slashes.size(); i++) {
+        String property = split_slashes[i];
+        if (property == "") continue;
+
+        if (i == split_slashes.size() - 1) {
+            if (!ClassDB::is_class_enabled(type)) {
+                print_error("Remote requested to instantiate resource with a nonexistant class: " + type);
+                return;
+            }
+
+            Object *resource = ClassDB::instantiate(type);
+            modified_on->set(property, resource);
+
+            if (modified_on == selected) {
+                _recurse_initiate(resource, resource_path);
+            }
+        }
+        else {
+            modified_on = modified_on->get(property);
+            if (!modified_on) {
+                print_error("Remote requested to change a property at path " + resource_path + " but couldn't resolve path.");
+                return;
+            }
+        }
+    }
+
 }
 
 // SIGNALS

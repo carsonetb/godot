@@ -19,7 +19,6 @@ class MultiGodot : public Node2D {
         typedef struct Action {
             enum ActionType {
                 PROPERTY_EDIT = 0,
-                RECURSIVE_PROPERTY_EDIT,
                 RENAME_NODE,
                 MOVE_NODE,
             };
@@ -55,6 +54,7 @@ class MultiGodot : public Node2D {
         ScriptEditor *script_editor = nullptr;
         EditorNode *editor_node_singleton = nullptr;
         Node *previous_selected_node = nullptr;
+        Node *selected = nullptr;
 
         // PROPERTIES
 
@@ -120,6 +120,8 @@ class MultiGodot : public Node2D {
         void _sync_live_edits();
         void _sync_scenes();
         void _sync_colab_scenes();
+        void _recurse_initiate(Object *selected, String base_path = "");
+        void _recurse_node_parameters(Node *root, Object *selected, String selected_node_path, String modified_param_path = "");
         void _sync_filesystem();
         void _sync_created_deleted_files();
         void _set_user_data_for_everyone(String item, Variant value);
@@ -141,6 +143,7 @@ class MultiGodot : public Node2D {
         void _set_as_script_owner(String path);
         void _apply_action(int type, String node_path, String new_path, String new_name, String property_path, 
                            Variant value);
+        void _instantiate_resource(String node_path, String resource_path, String type);
 
         // SIGNALS
 
