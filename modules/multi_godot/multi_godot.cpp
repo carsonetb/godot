@@ -600,6 +600,7 @@ void MultiGodot::_sync_scenes() {
 void MultiGodot::_sync_colab_scenes() {
     SceneTreeEditor *scene_tree_editor = SceneTreeDock::get_singleton()->get_tree_editor();    if (scene_tree_editor == nullptr) return;
     Node *selected = scene_tree_editor->get_selected();                                        if (selected == nullptr) return;
+    Node *root = EditorNode::get_singleton()->get_edited_scene();
 
     List<PropertyInfo> *property_infos = memnew(List<PropertyInfo>);
     selected->get_property_list(property_infos);
@@ -637,7 +638,7 @@ void MultiGodot::_sync_colab_scenes() {
 
         Action action;
         action.type = Action::PROPERTY_EDIT;
-        action.node_path = selected->get_path();
+        action.node_path = root->get_path_to(selected);
         action.property_path = info.name;
         action.old_value = previous;
         action.new_value = current;
@@ -965,7 +966,7 @@ void MultiGodot::_set_as_script_owner(String path) {
 void MultiGodot::_apply_action(int type, String node_path, String new_path, String new_name, String property_path, 
                                Variant new_value) {
     if (type == Action::PROPERTY_EDIT) {
-        Node *modified_on = EditorNode::get_singleton()->get_scene_root()->get_node(node_path);
+        Node *modified_on = EditorNode::get_singleton()->get_edited_scene()->get_node(node_path);
         if (!modified_on->get(property_path)) {
             print_error("Tried to set property " + property_path + " on a node at path " + node_path + " but the property doesn't exist");
             return;
