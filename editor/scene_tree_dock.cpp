@@ -2354,7 +2354,7 @@ void SceneTreeDock::_do_reparent(Node *p_new_parent, int p_position_in_parent, V
 
 	Array paths;
 	for (Node *E : p_nodes) {
-		paths.append(E);
+		paths.append(scene_root->get_path_to(E));
 	}
 	emit_signal("nodes_reparented", paths, scene_root->get_path_to(p_new_parent));
 

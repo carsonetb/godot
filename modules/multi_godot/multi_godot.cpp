@@ -607,14 +607,10 @@ void MultiGodot::_sync_colab_scenes() {
     selected = scene_tree_editor->get_selected();                                              if (selected == nullptr) return;
     Node *root = EditorNode::get_singleton()->get_edited_scene();
 
-    String selected_path = root->get_path_to(selected);
-
     List<PropertyInfo> *property_infos = memnew(List<PropertyInfo>);
     selected->get_property_list(property_infos);
 
     if (selected != previous_selected_node) {
-        last_selected_path = selected_path;
-
         previous_property_names.clear();
         previous_property_values.clear();
 
@@ -623,13 +619,6 @@ void MultiGodot::_sync_colab_scenes() {
         previous_selected_node = selected;
         return;
     }
-
-    if (last_selected_path != selected_path) { // Node was moved.
-        String new_parent_path = root->get_path_to(selected->get_parent());
-        _call_func(this, "_move_node", {last_selected_path, new_parent_path});
-    }
-
-    last_selected_path = selected_path;
 
     _recurse_node_parameters(root, selected, root->get_path_to(selected));
 }
@@ -1002,10 +991,15 @@ void MultiGodot::_receive_file_contents(String path, String contents) {
     print_line("Received updated file contents for path " + path);
     Ref<FileAccess> file = FileAccess::open(path, FileAccess::WRITE);
     file->store_string(contents);
+    file->close();
     EditorInterface::get_singleton()->get_resource_file_system()->scan();
 
     if (script_editor != nullptr) {
         script_editor->reload_scripts();
+    }
+
+    if (path.ends_with(".tscn")) {
+        EditorNode::get_singleton()->reload_scene(path);
     }
 }
 
@@ -1113,7 +1107,7 @@ void MultiGodot::_instantiate_resource(String node_path, String resource_path, S
 }
 
 void MultiGodot::_reparent_nodes(Array paths, String new_parent_path) {
-    Node *root = EditorNode::get_singleton()->get_edited_scene();
+    Node *root = EditorNode::get_singleton()->get_edited_scene()->get_parent();
     Node *parent = root->get_node(new_parent_path);
     if (!parent) {
         print_error("Remote requested to reparent some nodes to a parent at path " + new_parent_path + " but it doesn't exist.");
