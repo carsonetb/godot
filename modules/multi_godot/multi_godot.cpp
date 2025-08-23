@@ -702,15 +702,6 @@ void MultiGodot::_recurse_node_parameters(Node *root, Object *obj, String select
             print_line("Property modified at path " + this_param_path);
         }
 
-        Action action;
-        action.type = Action::PROPERTY_EDIT;
-        action.node_path = selected_node_path;
-        action.property_path = this_param_path;
-        action.old_value = previous;
-        action.new_value = current;
-
-        undo_stack.append(action);
-
         for (int j = 0; j < handshake_completed_with.size(); j++) { // This loop will only happen once in the function.
             uint64_t other_id = handshake_completed_with[j];
             if (other_id == steam_id) continue;
@@ -720,7 +711,7 @@ void MultiGodot::_recurse_node_parameters(Node *root, Object *obj, String select
             if (!other_data.has("current_scene_path")) continue;
             if ((String)other_data.get("current_scene_path") != (String)this_data.get("current_scene_path")) continue;
 
-            _call_func(this, "_apply_action", {action.type, action.node_path, action.new_path, action.new_name, action.property_path, action.new_value}, other_id);
+            _call_func(this, "_apply_action", {selected_node_path, this_param_path, current}, other_id);
         }
     }
 }
@@ -1034,44 +1025,42 @@ void MultiGodot::_set_as_script_owner(String path) {
     _set_user_data_for_everyone("current_spectating_script", "");
 }
 
-void MultiGodot::_apply_action(int type, String node_path, String new_path, String new_name, String property_path, Variant new_value) {
-    if (type == Action::PROPERTY_EDIT) {
-        Object *modified_on = EditorNode::get_singleton()->get_edited_scene()->get_node(node_path);
+void MultiGodot::_apply_action(String node_path, String property_path, Variant new_value) {
+    Object *modified_on = EditorNode::get_singleton()->get_edited_scene()->get_node(node_path);
 
-        Vector<String> split_slashes = property_path.split("/");
-        for (int i = 0; i < split_slashes.size(); i++) {
-            String property = split_slashes[i];
-            if (property == "") continue;
+    Vector<String> split_slashes = property_path.split("/");
+    for (int i = 0; i < split_slashes.size(); i++) {
+        String property = split_slashes[i];
+        if (property == "") continue;
 
-            if (modified_on->get_static_property_type(property) == Variant::NIL) {
-                print_error("Tried to set property " + property_path + " on a node at path " + node_path + " but the property doesn't exist (property name " + property + ")");
-                return;
-            }
-
-            if (i == split_slashes.size() - 1) {
-                modified_on->set(property, new_value);
-            }
-            else {
-                modified_on = modified_on->get(property);
-                if (!modified_on) {
-                    print_error("Remote requested to change a property at path " + property_path + " but couldn't resolve path.");
-                    return;
-                }
-            }
-        }
-
-        if (modified_on != selected) return;
-        
-        int index = previous_property_names.find(property_path);
-        if (index == -1) {
-            print_error("Remote requested to change a property that we aren't aware of (" + property_path + ")");
-            previous_property_names.append(property_path);
-            previous_property_values.append(new_value);
+        if (modified_on->get_static_property_type(property) == Variant::NIL) {
+            print_error("Tried to set property " + property_path + " on a node at path " + node_path + " but the property doesn't exist (property name " + property + ")");
             return;
         }
 
-        previous_property_values.set(index, new_value);
+        if (i == split_slashes.size() - 1) {
+            modified_on->set(property, new_value);
+        }
+        else {
+            modified_on = modified_on->get(property);
+            if (!modified_on) {
+                print_error("Remote requested to change a property at path " + property_path + " but couldn't resolve path.");
+                return;
+            }
+        }
     }
+
+    if (modified_on != selected) return;
+    
+    int index = previous_property_names.find(property_path);
+    if (index == -1) {
+        print_error("Remote requested to change a property that we aren't aware of (" + property_path + ")");
+        previous_property_names.append(property_path);
+        previous_property_values.append(new_value);
+        return;
+    }
+
+    previous_property_values.set(index, new_value);
 }
 
 void MultiGodot::_instantiate_resource(String node_path, String resource_path, String type) {

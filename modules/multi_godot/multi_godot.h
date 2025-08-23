@@ -16,22 +16,6 @@ class MultiGodot : public Node2D {
     GDCLASS(MultiGodot, Node2D);
 
     protected:
-        typedef struct Action {
-            enum ActionType {
-                PROPERTY_EDIT = 0,
-                RENAME_NODE,
-                MOVE_NODE,
-            };
-
-            int type;
-            NodePath node_path;
-            NodePath new_path; // Only used for move
-            String new_name; // Only used for rename
-            String property_path; // Could be recursive for example: 'resource/color' or just: 'position'
-            Variant old_value;
-            Variant new_value;
-        } Action;
-
         enum RemoteMainScreenStatus {
             VIEWPORT_2D,
             VIEWPORT_3D,
@@ -83,7 +67,6 @@ class MultiGodot : public Node2D {
         Vector<String> recently_reparented_by_remote;
         Vector<Variant> previous_property_values;
         Vector<uint64_t> steam_ids;
-        Vector<Action> undo_stack;
         Thread filesystem_scanner;
         Mutex mutex;
 
@@ -145,7 +128,7 @@ class MultiGodot : public Node2D {
         void _rename_file(String from, String to);
         void _sync_user_data(uint64_t user_id, Dictionary data);
         void _set_as_script_owner(String path);
-        void _apply_action(int type, String node_path, String new_path, String new_name, String property_path, Variant value);
+        void _apply_action(String node_path, String property_path, Variant value);
         void _instantiate_resource(String node_path, String resource_path, String type);
         void _reparent_nodes(Array paths, String new_path);
 
