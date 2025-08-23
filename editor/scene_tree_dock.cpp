@@ -4642,7 +4642,7 @@ void SceneTreeDock::_bind_methods() {
 	ADD_SIGNAL(MethodInfo("remote_tree_selected"));
 	ADD_SIGNAL(MethodInfo("add_node_used"));
 	ADD_SIGNAL(MethodInfo("node_created", PropertyInfo(Variant::OBJECT, "node", PROPERTY_HINT_RESOURCE_TYPE, "Node")));
-	ADD_SIGNAL(MethodInfo("nodes_reparented"), PropertyInfo(Variant::ARRAY, "nodes"), PropertyInfo(Variant::NODE_PATH, "new_parent"));
+	ADD_SIGNAL(MethodInfo("nodes_reparented", PropertyInfo(Variant::ARRAY, "nodes"), PropertyInfo(Variant::NODE_PATH, "new_parent")));
 }
 
 SceneTreeDock *SceneTreeDock::singleton = nullptr;

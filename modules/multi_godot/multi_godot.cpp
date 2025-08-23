@@ -648,9 +648,9 @@ void MultiGodot::_recurse_initiate(Object *obj, String base_path) {
         Variant value = obj->get(info.name);
 
         if (value.get_type() == Variant::OBJECT) {
-            Object *obj = value.operator Object *();
-            if (obj) {
-                _recurse_initiate(obj, this_path);
+            Object *child_obj = value.operator Object *();
+            if (child_obj) {
+                _recurse_initiate(child_obj, this_path);
             }
             else {
                 value = false;
@@ -686,16 +686,16 @@ void MultiGodot::_recurse_node_parameters(Node *root, Object *obj, String select
         Variant previous = previous_property_values.get(index);
 
         if (current.get_type() == Variant::OBJECT) { // Pointer type, can't be sent over interwebz!
-            Object *obj = current.operator Object *();
-            if (!previous && obj) {
+            Object *child_object = current.operator Object *();
+            if (!previous && child_object) {
                 print_line("Resource created at path " + this_param_path);
-                _recurse_initiate(obj, this_param_path);
-                _call_func(this, "_instantiate_resource", {selected_node_path, this_param_path, obj->get_class()});
+                _recurse_initiate(child_object, this_param_path);
+                _call_func(this, "_instantiate_resource", {selected_node_path, this_param_path, child_object->get_class()});
                 previous_property_values.set(index, current);
                 continue;
             }
-            if (obj) {
-                _recurse_node_parameters(root, obj, selected_node_path, this_param_path);
+            if (child_object) {
+                _recurse_node_parameters(root, child_object, selected_node_path, this_param_path);
                 previous_property_values.set(index, current);
                 continue;
             }
@@ -1113,9 +1113,7 @@ void MultiGodot::_instantiate_resource(String node_path, String resource_path, S
 }
 
 void MultiGodot::_reparent_nodes(Array paths, String new_parent_path) {
-    SceneTreeEditor *scene_tree_editor = SceneTreeDock::get_singleton()->get_tree_editor();
     Node *root = EditorNode::get_singleton()->get_edited_scene();
-
     Node *parent = root->get_node(new_parent_path);
     if (!parent) {
         print_error("Remote requested to reparent some nodes to a parent at path " + new_parent_path + " but it doesn't exist.");
