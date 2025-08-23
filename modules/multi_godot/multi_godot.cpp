@@ -34,6 +34,8 @@ void MultiGodot::_bind_methods() {
     ClassDB::bind_method(D_METHOD("_on_p2p_session_request", "remote_id"), &MultiGodot::_on_p2p_session_request);
     ClassDB::bind_method(D_METHOD("_on_p2p_session_connect_fail", "steam_id", "session_error"), &MultiGodot::_on_p2p_session_connect_fail);
     ClassDB::bind_method(D_METHOD("_on_nodes_reparented", "nodes", "new_parent"), &MultiGodot::_on_nodes_reparented);
+    ClassDB::bind_method(D_METHOD("_on_node_created", "node", "type", "is_custom_type", "weird_type"), &MultiGodot::_on_node_created);
+    ClassDB::bind_method(D_METHOD("_on_scenes_instantiated", "parent", "paths", "index"), &MultiGodot::_on_scenes_instantiated);
 
     // Remote Callables
 
@@ -52,6 +54,8 @@ void MultiGodot::_bind_methods() {
     ClassDB::bind_method(D_METHOD("_apply_action"), &MultiGodot::_apply_action);
     ClassDB::bind_method(D_METHOD("_instantiate_resource", "node_path", "resource_path", "type"), &MultiGodot::_instantiate_resource);
     ClassDB::bind_method(D_METHOD("_reparent_nodes", "old", "new"), &MultiGodot::_reparent_nodes);
+    ClassDB::bind_method(D_METHOD("_create_node", "parent_path", "type", "is_custom_type", "weird_type"), &MultiGodot::_create_node);
+    ClassDB::bind_method(D_METHOD("_instantiate_scenes", "parent_path", "paths", "index"), &MultiGodot::_instantiate_scenes);
 
     // Button signals
 
@@ -118,7 +122,11 @@ void MultiGodot::_ready() {
 
     filesystem_scanner.start(_threaded_filesystem_scanner, this);
 
-    SceneTreeDock::get_singleton()->connect("nodes_reparented", Callable(this, "_on_nodes_reparented"));
+    SceneTreeDock *scene_tree_dock = SceneTreeDock::get_singleton();
+
+    scene_tree_dock->connect("nodes_reparented", Callable(this, "_on_nodes_reparented"));
+    scene_tree_dock->connect("node_created_type", Callable(this, "_on_node_created"));
+    scene_tree_dock->connect("scenes_instantiated", Callable(this, "_on_scenes_instantiated"));
     button_notifier->connect("editor_tab_changed", Callable(this, "_on_editor_tab_changed"));
     button_notifier->connect("current_script_path_changed", Callable(this, "_on_current_script_path_changed"));
     steam->connect("lobby_created", Callable(this, "_on_lobby_created"));
@@ -1125,6 +1133,35 @@ void MultiGodot::_reparent_nodes(Array paths, String new_parent_path) {
     }
 }
 
+void MultiGodot::_create_node(String parent_path, String type, bool is_custom_type, String weird_type) {
+    Node *root = EditorNode::get_singleton()->get_edited_scene();
+    Node *parent = root->get_node(parent_path);
+
+    Variant obj;
+	if (is_custom_type) {
+		if (ScriptServer::is_global_class(type)) {
+			obj = EditorNode::get_editor_data().script_class_instance(type);
+			Node *n = Object::cast_to<Node>(obj);
+			if (n) {
+				n->set_name(type);
+			}
+		} else {
+			obj = EditorNode::get_editor_data().instantiate_custom_type(weird_type, type);
+		}
+	} else {
+		obj = ClassDB::instantiate(type);
+	}
+
+    obj.operator Object *();
+    Node *node = Object::cast_to<Node>(obj);
+    parent->add_child(node, true);
+}
+
+void MultiGodot::_instantiate_scenes(String parent_path, Vector<String> paths, int index) {
+    Node *root = EditorNode::get_singleton()->get_edited_scene();
+    SceneTreeDock::get_singleton()->_perform_instantiate_scenes(paths, root->get_node(parent_path), index, false);
+}
+
 // SIGNALS
 
 void MultiGodot::_on_lobby_created(int connect, uint64_t this_lobby_id) {
@@ -1288,6 +1325,22 @@ void MultiGodot::_on_nodes_reparented(Array nodes, NodePath new_parent) {
     }
 
     _call_func(this, "_reparent_nodes", {nodes, new_parent});
+}
+
+void MultiGodot::_on_node_created(Node *node, String type, bool is_custom_type, String weird_type) {
+    if (VERBOSE_DEBUG) {
+        print_line("Node created with type " + type);
+    }
+    Node *root = EditorNode::get_singleton()->get_edited_scene();
+    _call_func(this, "_create_node", {root->get_path_to(node->get_parent()), type, is_custom_type, weird_type});
+}
+
+void MultiGodot::_on_scenes_instantiated(Node *parent, Vector<String> paths, int index) {
+    if (VERBOSE_DEBUG) {
+        print_line("Some scenes were instantiated");
+    }
+    Node *root = EditorNode::get_singleton()->get_edited_scene();
+    _call_func(this, "_instantiate_scenes", {root->get_path_to(parent), paths, index});
 }
 
 // PLUGIN

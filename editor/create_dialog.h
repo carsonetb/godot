@@ -52,7 +52,6 @@ class CreateDialog : public ConfirmationDialog {
 	};
 
 	LineEdit *search_box = nullptr;
-	Tree *search_options = nullptr;
 
 	String base_type;
 	bool is_base_type_node = false;
@@ -114,6 +113,7 @@ protected:
 	void _save_and_update_favorite_list();
 
 public:
+	Tree *search_options = nullptr;
 	Variant instantiate_selected();
 	String get_selected_type();
 

@@ -288,7 +288,7 @@ void SceneTreeDock::instantiate_scenes(const Vector<String> &p_files, Node *p_pa
 	_perform_instantiate_scenes(p_files, parent, -1);
 }
 
-void SceneTreeDock::_perform_instantiate_scenes(const Vector<String> &p_files, Node *p_parent, int p_pos) {
+void SceneTreeDock::_perform_instantiate_scenes(const Vector<String> &p_files, Node *p_parent, int p_pos, bool should_emit) {
 	ERR_FAIL_NULL(p_parent);
 
 	Vector<Node *> instances;
@@ -335,6 +335,31 @@ void SceneTreeDock::_perform_instantiate_scenes(const Vector<String> &p_files, N
 		return;
 	}
 
+	if (!should_emit) {
+		editor_selection->clear();
+		for (int i = 0; i < instances.size(); i++) {
+			Node *instantiated_scene = instances[i];
+
+			p_parent->add_child(instantiated_scene, true);
+			if (p_pos >= 0) {
+				p_parent->move_child(instantiated_scene, p_pos + i);
+			}
+			instantiated_scene->set_owner(edited_scene);
+			editor_selection->add_node(instantiated_scene);
+			
+			String new_name = p_parent->validate_child_name(instantiated_scene);
+			EditorDebuggerNode *ed = EditorDebuggerNode::get_singleton();
+			ed->live_debug_instantiate_node(edited_scene->get_path_to(p_parent), p_files[i], new_name);
+		}
+
+		_push_item(instances[instances.size() - 1]);
+		for (int i = 0; i < instances.size(); i++) {
+			emit_signal(SNAME("node_created"), instances[i]);
+		}
+
+		return;
+	}
+
 	EditorUndoRedoManager *undo_redo = EditorUndoRedoManager::get_singleton();
 	undo_redo->create_action_for_history(TTRN("Instantiate Scene", "Instantiate Scenes", instances.size()), editor_data->get_current_edited_scene_history_id());
 	undo_redo->add_do_method(editor_selection, "clear");
@@ -362,6 +387,8 @@ void SceneTreeDock::_perform_instantiate_scenes(const Vector<String> &p_files, N
 	for (int i = 0; i < instances.size(); i++) {
 		emit_signal(SNAME("node_created"), instances[i]);
 	}
+
+	emit_signal("scenes_instantiated", p_parent, p_files, p_pos);
 }
 
 void SceneTreeDock::_perform_create_audio_stream_players(const Vector<String> &p_files, Node *p_parent, int p_pos) {
@@ -2951,6 +2978,13 @@ Node *SceneTreeDock::_do_create(Node *p_parent) {
 	undo_redo->add_do_method(this, "_post_do_create", child);
 	undo_redo->commit_action();
 
+	TreeItem *selected = create_dialog->search_options->get_selected();
+	String non_global_type_name = selected->get_text(0);
+	Array meta = selected->get_metadata(0).operator Array();
+	bool is_custom_type = meta[0].operator bool();
+	String type = meta[1].operator String();
+	emit_signal("node_created_type", child, type, is_custom_type, non_global_type_name);
+
 	return child;
 }
 
@@ -4643,6 +4677,8 @@ void SceneTreeDock::_bind_methods() {
 	ADD_SIGNAL(MethodInfo("add_node_used"));
 	ADD_SIGNAL(MethodInfo("node_created", PropertyInfo(Variant::OBJECT, "node", PROPERTY_HINT_RESOURCE_TYPE, "Node")));
 	ADD_SIGNAL(MethodInfo("nodes_reparented", PropertyInfo(Variant::ARRAY, "nodes"), PropertyInfo(Variant::NODE_PATH, "new_parent")));
+	ADD_SIGNAL(MethodInfo("node_created_type", PropertyInfo(Variant::OBJECT, "nodes"), PropertyInfo(Variant::STRING, "type"), PropertyInfo(Variant::BOOL, "is_custom_type"), PropertyInfo(Variant::STRING, "weird_type")));
+	ADD_SIGNAL(MethodInfo("scenes_instantiated", PropertyInfo(Variant::OBJECT, "parent"), PropertyInfo(Variant::PACKED_STRING_ARRAY, "paths"), PropertyInfo(Variant::INT, "index")));
 }
 
 SceneTreeDock *SceneTreeDock::singleton = nullptr;

@@ -131,6 +131,8 @@ class MultiGodot : public Node2D {
         void _apply_action(String node_path, String property_path, Variant value);
         void _instantiate_resource(String node_path, String resource_path, String type);
         void _reparent_nodes(Array paths, String new_path);
+        void _create_node(String parent_path, String type, bool is_custom_type, String weird_type);
+        void _instantiate_scenes(String parent_path, Vector<String> paths, int index);
 
         // SIGNALS
 
@@ -143,6 +145,8 @@ class MultiGodot : public Node2D {
         void _on_editor_tab_changed(int index);
         void _on_current_script_path_changed(String path);
         void _on_nodes_reparented(Array nodes, NodePath new_parent);
+        void _on_node_created(Node *node, String type, bool is_custom_type, String weird_type);
+        void _on_scenes_instantiated(Node *parent, Vector<String> paths, int index);
     
     public:
         MultiGodot();
