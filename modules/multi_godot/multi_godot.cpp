@@ -702,6 +702,17 @@ void MultiGodot::_recurse_node_parameters(Node *root, Object *obj, String select
             print_line("Property modified at path " + this_param_path);
         }
 
+        if (this_param_path == "/name") {
+            Vector<String> split_slashes = selected_node_path.split("/");
+            int last_ind = split_slashes.size() - 1;
+            split_slashes.set(last_ind, previous); // Set name to previous name so it can be accessed on the other side.
+            selected_node_path = "";
+            for (int j = 0; j < split_slashes.size(); j++) {
+                selected_node_path += split_slashes.get(j) + (j == last_ind ? "" : "/");
+            }
+            print_line(selected_node_path);
+        }
+
         for (int j = 0; j < handshake_completed_with.size(); j++) { // This loop will only happen once in the function.
             uint64_t other_id = handshake_completed_with[j];
             if (other_id == steam_id) continue;
