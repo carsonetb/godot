@@ -134,7 +134,6 @@ class SceneTreeDock : public VBoxContainer {
 	void _perform_property_drop(Node *p_node, const String &p_property, Ref<Resource> p_res);
 
 	EditorData *editor_data = nullptr;
-	EditorSelection *editor_selection = nullptr;
 
 	List<Node *> node_clipboard;
 	HashSet<Node *> node_clipboard_edited_scene_owned;
@@ -173,7 +172,6 @@ class SceneTreeDock : public VBoxContainer {
 	Node *_do_create(Node *p_parent);
 	void _post_do_create(Node *p_child);
 	Node *scene_root = nullptr;
-	Node *edited_scene = nullptr;
 	Node *pending_click_select = nullptr;
 	bool tree_clicked = false;
 
@@ -311,6 +309,8 @@ protected:
 	static void _bind_methods();
 
 public:
+	EditorSelection *editor_selection = nullptr;
+	Node *edited_scene = nullptr;
 	String get_filter();
 	void set_filter(const String &p_filter);
 	void save_branch_to_file(const String &p_directory);

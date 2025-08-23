@@ -1152,9 +1152,11 @@ void MultiGodot::_create_node(String parent_path, String type, bool is_custom_ty
 		obj = ClassDB::instantiate(type);
 	}
 
-    obj.operator Object *();
-    Node *node = Object::cast_to<Node>(obj);
+    Object *pointer = obj.operator Object *();
+    Node *node = Object::cast_to<Node>(pointer);
     parent->add_child(node, true);
+    node->set_owner(SceneTreeDock::get_singleton()->edited_scene);
+    SceneTreeDock::get_singleton()->editor_selection->add_node(node);
 }
 
 void MultiGodot::_instantiate_scenes(String parent_path, Vector<String> paths, int index) {
