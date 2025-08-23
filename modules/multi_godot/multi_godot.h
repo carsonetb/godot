@@ -39,6 +39,8 @@ class MultiGodot : public Node2D {
             MS_OTHER,
         };
 
+        // CONSTANTS
+
         static const int PACKET_READ_LIMIT = 32;
         static const int MAX_MEMBERS = 4; // Possibly increase this in the future if there is a need.
         static const int DEFAULT_CHANNEL = 0;
@@ -73,6 +75,7 @@ class MultiGodot : public Node2D {
         String live_last_code;
         String script_editor_previous_line_text;
         String last_scene_data;
+        String last_selected_path;
         Vector<HashMap<String, Variant>> lobby_members;
         Vector<String> new_files;
         Vector<String> deleted_files; // Both this and new_files will fill up if not cleaned up by the main thread.
@@ -141,9 +144,9 @@ class MultiGodot : public Node2D {
         void _rename_file(String from, String to);
         void _sync_user_data(uint64_t user_id, Dictionary data);
         void _set_as_script_owner(String path);
-        void _apply_action(int type, String node_path, String new_path, String new_name, String property_path, 
-                           Variant value);
+        void _apply_action(int type, String node_path, String new_path, String new_name, String property_path, Variant value);
         void _instantiate_resource(String node_path, String resource_path, String type);
+        void _move_node(String current_path, String new_path);
 
         // SIGNALS
 

@@ -49,6 +49,7 @@ void MultiGodot::_bind_methods() {
     ClassDB::bind_method(D_METHOD("_set_as_script_owner", "path"), &MultiGodot::_set_as_script_owner);
     ClassDB::bind_method(D_METHOD("_apply_action"), &MultiGodot::_apply_action);
     ClassDB::bind_method(D_METHOD("_instantiate_resource", "node_path", "resource_path", "type"), &MultiGodot::_instantiate_resource);
+    ClassDB::bind_method(D_METHOD("_move_node", "old", "new"), &MultiGodot::_move_node);
 
     // Button signals
 
@@ -603,10 +604,14 @@ void MultiGodot::_sync_colab_scenes() {
     selected = scene_tree_editor->get_selected();                                              if (selected == nullptr) return;
     Node *root = EditorNode::get_singleton()->get_edited_scene();
 
+    String selected_path = root->get_path_to(selected);
+
     List<PropertyInfo> *property_infos = memnew(List<PropertyInfo>);
     selected->get_property_list(property_infos);
 
     if (selected != previous_selected_node) {
+        last_selected_path = selected_path;
+
         previous_property_names.clear();
         previous_property_values.clear();
 
@@ -615,6 +620,13 @@ void MultiGodot::_sync_colab_scenes() {
         previous_selected_node = selected;
         return;
     }
+
+    if (last_selected_path != selected_path) { // Node was moved.
+        String new_parent_path = root->get_path_to(selected->get_parent());
+        _call_func(this, "_move_node", {last_selected_path, new_parent_path});
+    }
+
+    last_selected_path = selected_path;
 
     _recurse_node_parameters(root, selected, root->get_path_to(selected));
 }
@@ -1025,8 +1037,7 @@ void MultiGodot::_set_as_script_owner(String path) {
     _set_user_data_for_everyone("current_spectating_script", "");
 }
 
-void MultiGodot::_apply_action(int type, String node_path, String new_path, String new_name, String property_path, 
-                               Variant new_value) {
+void MultiGodot::_apply_action(int type, String node_path, String new_path, String new_name, String property_path, Variant new_value) {
     if (type == Action::PROPERTY_EDIT) {
         Object *modified_on = EditorNode::get_singleton()->get_edited_scene()->get_node(node_path);
 
@@ -1096,6 +1107,27 @@ void MultiGodot::_instantiate_resource(String node_path, String resource_path, S
         }
     }
 
+}
+
+void MultiGodot::_move_node(String current_path, String new_parent_path) {
+    SceneTreeEditor *scene_tree_editor = SceneTreeDock::get_singleton()->get_tree_editor();
+    Node *root = EditorNode::get_singleton()->get_edited_scene();
+
+    Node *moved = root->get_node(current_path);
+    if (!moved) {
+        print_error("Request to move node but the node at path " + current_path + " does not exist. Was it moved?");
+        return;
+    }
+
+    Node *parent = root->get_node(new_parent_path);
+    if (!parent) {
+        print_error("Request to move a node (that exists) to a parent that doesn't exist at path " + new_parent_path + ". No parents?");
+        return;
+    }
+
+    // Remove the child and give it to new parents.
+    moved->get_parent()->remove_child(moved);
+    parent->add_child(moved);
 }
 
 // SIGNALS
