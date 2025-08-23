@@ -10,6 +10,7 @@
 #include "editor/editor_file_system.h"
 #include "editor/editor_interface.h"
 #include "editor/editor_main_screen.h"
+#include "editor/editor_undo_redo_manager.h"
 #include "editor/gui/scene_tree_editor.h"
 #include "editor/plugins/script_editor_plugin.h"
 #include "editor/scene_tree_dock.h"
@@ -32,6 +33,7 @@ void MultiGodot::_bind_methods() {
     ClassDB::bind_method(D_METHOD("_on_lobby_chat_update", "this_lobby_id", "change_id", "making_change_id", "chat_state"), &MultiGodot::_on_lobby_chat_update);
     ClassDB::bind_method(D_METHOD("_on_p2p_session_request", "remote_id"), &MultiGodot::_on_p2p_session_request);
     ClassDB::bind_method(D_METHOD("_on_p2p_session_connect_fail", "steam_id", "session_error"), &MultiGodot::_on_p2p_session_connect_fail);
+    ClassDB::bind_method(D_METHOD("_on_nodes_reparented", "nodes", "new_parent"), &MultiGodot::_on_nodes_reparented);
 
     // Remote Callables
 
@@ -49,7 +51,7 @@ void MultiGodot::_bind_methods() {
     ClassDB::bind_method(D_METHOD("_set_as_script_owner", "path"), &MultiGodot::_set_as_script_owner);
     ClassDB::bind_method(D_METHOD("_apply_action"), &MultiGodot::_apply_action);
     ClassDB::bind_method(D_METHOD("_instantiate_resource", "node_path", "resource_path", "type"), &MultiGodot::_instantiate_resource);
-    ClassDB::bind_method(D_METHOD("_move_node", "old", "new"), &MultiGodot::_move_node);
+    ClassDB::bind_method(D_METHOD("_reparent_nodes", "old", "new"), &MultiGodot::_reparent_nodes);
 
     // Button signals
 
@@ -116,6 +118,7 @@ void MultiGodot::_ready() {
 
     filesystem_scanner.start(_threaded_filesystem_scanner, this);
 
+    SceneTreeDock::get_singleton()->connect("nodes_reparented", Callable(this, "_on_nodes_reparented"));
     button_notifier->connect("editor_tab_changed", Callable(this, "_on_editor_tab_changed"));
     button_notifier->connect("current_script_path_changed", Callable(this, "_on_current_script_path_changed"));
     steam->connect("lobby_created", Callable(this, "_on_lobby_created"));
@@ -1109,25 +1112,25 @@ void MultiGodot::_instantiate_resource(String node_path, String resource_path, S
 
 }
 
-void MultiGodot::_move_node(String current_path, String new_parent_path) {
+void MultiGodot::_reparent_nodes(Array paths, String new_parent_path) {
     SceneTreeEditor *scene_tree_editor = SceneTreeDock::get_singleton()->get_tree_editor();
     Node *root = EditorNode::get_singleton()->get_edited_scene();
 
-    Node *moved = root->get_node(current_path);
-    if (!moved) {
-        print_error("Request to move node but the node at path " + current_path + " does not exist. Was it moved?");
-        return;
-    }
-
     Node *parent = root->get_node(new_parent_path);
     if (!parent) {
-        print_error("Request to move a node (that exists) to a parent that doesn't exist at path " + new_parent_path + ". No parents?");
+        print_error("Remote requested to reparent some nodes to a parent at path " + new_parent_path + " but it doesn't exist.");
         return;
     }
 
-    // Remove the child and give it to new parents.
-    moved->get_parent()->remove_child(moved);
-    parent->add_child(moved);
+    for (int i = 0; i < paths.size(); i++) {
+        String path = paths[i];
+        Node *node = root->get_node(path);
+        if (!node) {
+            print_error("Remote requested to reparent a node at path " + path + " but it doesn't exist.");
+            continue;
+        }
+        node->reparent(parent);
+    }
 }
 
 // SIGNALS
@@ -1284,6 +1287,15 @@ void MultiGodot::_on_current_script_path_changed(String path) {
 
     _set_user_data_for_everyone("current_script_path", path);
     _set_user_data_for_everyone("current_spectating_script", "");
+}
+
+void MultiGodot::_on_nodes_reparented(Array nodes, NodePath new_parent) {
+    if (recently_reparented_by_remote.has(new_parent)) {
+        recently_reparented_by_remote.remove_at(recently_reparented_by_remote.find(new_parent));
+        return;
+    }
+
+    _call_func(this, "_reparent_nodes", {nodes, new_parent});
 }
 
 // PLUGIN

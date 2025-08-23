@@ -80,6 +80,7 @@ class MultiGodot : public Node2D {
         Vector<String> new_files;
         Vector<String> deleted_files; // Both this and new_files will fill up if not cleaned up by the main thread.
         Vector<String> previous_property_names;
+        Vector<String> recently_reparented_by_remote;
         Vector<Variant> previous_property_values;
         Vector<uint64_t> steam_ids;
         Vector<Action> undo_stack;
@@ -146,7 +147,7 @@ class MultiGodot : public Node2D {
         void _set_as_script_owner(String path);
         void _apply_action(int type, String node_path, String new_path, String new_name, String property_path, Variant value);
         void _instantiate_resource(String node_path, String resource_path, String type);
-        void _move_node(String current_path, String new_path);
+        void _reparent_nodes(Array paths, String new_path);
 
         // SIGNALS
 
@@ -158,6 +159,7 @@ class MultiGodot : public Node2D {
         void _on_p2p_session_connect_fail(uint64_t this_steam_id, int session_error);
         void _on_editor_tab_changed(int index);
         void _on_current_script_path_changed(String path);
+        void _on_nodes_reparented(Array nodes, NodePath new_parent);
     
     public:
         MultiGodot();
