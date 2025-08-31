@@ -1117,7 +1117,7 @@ void MultiGodot::_instantiate_resource(String node_path, String resource_path, S
 
 }
 
-void MultiGodot::_reparent_nodes(Array paths, String new_parent_path) {
+void MultiGodot::_reparent_nodes(Array paths, String new_parent_path, int pos_in_parent) {
     Node *root = EditorNode::get_singleton()->get_edited_scene()->get_parent();
     Node *parent = root->get_node(new_parent_path);
     if (!parent) {
@@ -1133,6 +1133,7 @@ void MultiGodot::_reparent_nodes(Array paths, String new_parent_path) {
             continue;
         }
         node->reparent(parent);
+        parent->move_child(node, pos_in_parent);
     }
 }
 
@@ -1330,13 +1331,13 @@ void MultiGodot::_on_current_script_path_changed(String path) {
     _set_user_data_for_everyone("current_spectating_script", "");
 }
 
-void MultiGodot::_on_nodes_reparented(Array nodes, NodePath new_parent) {
+void MultiGodot::_on_nodes_reparented(Array nodes, NodePath new_parent, int pos_in_parent) {
     if (recently_reparented_by_remote.has(new_parent)) {
         recently_reparented_by_remote.remove_at(recently_reparented_by_remote.find(new_parent));
         return;
     }
 
-    _call_func(this, "_reparent_nodes", {nodes, new_parent});
+    _call_func(this, "_reparent_nodes", {nodes, new_parent, pos_in_parent});
 }
 
 void MultiGodot::_on_node_created(Node *node, String type, bool is_custom_type, String weird_type) {

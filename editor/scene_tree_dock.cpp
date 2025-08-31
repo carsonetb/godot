@@ -2383,7 +2383,7 @@ void SceneTreeDock::_do_reparent(Node *p_new_parent, int p_position_in_parent, V
 	for (Node *E : p_nodes) {
 		paths.append(scene_root->get_path_to(E));
 	}
-	emit_signal("nodes_reparented", paths, scene_root->get_path_to(p_new_parent));
+	emit_signal("nodes_reparented", paths, scene_root->get_path_to(p_new_parent), p_position_in_parent);
 
 	p_nodes.sort_custom<Node::Comparator>(); //Makes result reliable.
 
@@ -4688,7 +4688,7 @@ void SceneTreeDock::_bind_methods() {
 	ADD_SIGNAL(MethodInfo("remote_tree_selected"));
 	ADD_SIGNAL(MethodInfo("add_node_used"));
 	ADD_SIGNAL(MethodInfo("node_created", PropertyInfo(Variant::OBJECT, "node", PROPERTY_HINT_RESOURCE_TYPE, "Node")));
-	ADD_SIGNAL(MethodInfo("nodes_reparented", PropertyInfo(Variant::ARRAY, "nodes"), PropertyInfo(Variant::NODE_PATH, "new_parent")));
+	ADD_SIGNAL(MethodInfo("nodes_reparented", PropertyInfo(Variant::ARRAY, "nodes"), PropertyInfo(Variant::NODE_PATH, "new_parent"), PropertyInfo(Variant::INT, "pos_in_parent")));
 	ADD_SIGNAL(MethodInfo("node_created_type", PropertyInfo(Variant::OBJECT, "nodes"), PropertyInfo(Variant::STRING, "type"), PropertyInfo(Variant::BOOL, "is_custom_type"), PropertyInfo(Variant::STRING, "weird_type")));
 	ADD_SIGNAL(MethodInfo("scenes_instantiated", PropertyInfo(Variant::OBJECT, "parent"), PropertyInfo(Variant::PACKED_STRING_ARRAY, "paths"), PropertyInfo(Variant::INT, "index")));
 	ADD_SIGNAL(MethodInfo("nodes_deleted", PropertyInfo(Variant::PACKED_STRING_ARRAY, "paths")));
