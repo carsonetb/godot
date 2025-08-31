@@ -36,6 +36,7 @@ void MultiGodot::_bind_methods() {
     ClassDB::bind_method(D_METHOD("_on_nodes_reparented", "nodes", "new_parent"), &MultiGodot::_on_nodes_reparented);
     ClassDB::bind_method(D_METHOD("_on_node_created", "node", "type", "is_custom_type", "weird_type"), &MultiGodot::_on_node_created);
     ClassDB::bind_method(D_METHOD("_on_scenes_instantiated", "parent", "paths", "index"), &MultiGodot::_on_scenes_instantiated);
+    ClassDB::bind_method(D_METHOD("_on_nodes_deleted", "nodes"), &MultiGodot::_on_nodes_deleted);
 
     // Remote Callables
 
@@ -56,6 +57,7 @@ void MultiGodot::_bind_methods() {
     ClassDB::bind_method(D_METHOD("_reparent_nodes", "old", "new"), &MultiGodot::_reparent_nodes);
     ClassDB::bind_method(D_METHOD("_create_node", "parent_path", "type", "is_custom_type", "weird_type"), &MultiGodot::_create_node);
     ClassDB::bind_method(D_METHOD("_instantiate_scenes", "parent_path", "paths", "index"), &MultiGodot::_instantiate_scenes);
+    ClassDB::bind_method(D_METHOD("_delete_nodes", "paths"), &MultiGodot::_delete_nodes);
 
     // Button signals
 
@@ -127,6 +129,7 @@ void MultiGodot::_ready() {
     scene_tree_dock->connect("nodes_reparented", Callable(this, "_on_nodes_reparented"));
     scene_tree_dock->connect("node_created_type", Callable(this, "_on_node_created"));
     scene_tree_dock->connect("scenes_instantiated", Callable(this, "_on_scenes_instantiated"));
+    scene_tree_dock->connect("nodes_deleted", Callable(this, "_on_nodes_deleted"));
     button_notifier->connect("editor_tab_changed", Callable(this, "_on_editor_tab_changed"));
     button_notifier->connect("current_script_path_changed", Callable(this, "_on_current_script_path_changed"));
     steam->connect("lobby_created", Callable(this, "_on_lobby_created"));
@@ -1164,6 +1167,13 @@ void MultiGodot::_instantiate_scenes(String parent_path, Vector<String> paths, i
     SceneTreeDock::get_singleton()->_perform_instantiate_scenes(paths, root->get_node(parent_path), index, false);
 }
 
+void MultiGodot::_delete_nodes(Vector<String> paths) {
+    Node *root = EditorNode::get_singleton()->get_edited_scene();
+    for (int i = 0; i < paths.size(); i++) {
+        root->get_node(paths.get(i))->queue_free();
+    }
+}
+
 // SIGNALS
 
 void MultiGodot::_on_lobby_created(int connect, uint64_t this_lobby_id) {
@@ -1343,6 +1353,13 @@ void MultiGodot::_on_scenes_instantiated(Node *parent, Vector<String> paths, int
     }
     Node *root = EditorNode::get_singleton()->get_edited_scene();
     _call_func(this, "_instantiate_scenes", {root->get_path_to(parent), paths, index});
+}
+
+void MultiGodot::_on_nodes_deleted(Vector<String> paths) {
+    if (VERBOSE_DEBUG) {
+        print_line("Some scenes were deleted");
+    }
+    _call_func(this, "_delete_nodes", {paths});
 }
 
 // PLUGIN

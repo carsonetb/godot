@@ -2795,6 +2795,16 @@ void SceneTreeDock::_delete_confirm(bool p_cut) {
 	if (remove_list.is_empty()) {
 		return;
 	}
+	
+	Vector<Node *> nodes;
+	for (Node *n : remove_list) {
+		nodes.append(n);
+	}
+    Node *root = EditorNode::get_singleton()->get_edited_scene();
+    Vector<String> paths;
+    for (int i = 0; i < nodes.size(); i++) {
+        paths.append(root->get_path_to(nodes.get(i)));
+    }
 
 	bool entire_scene = false;
 
@@ -2882,6 +2892,8 @@ void SceneTreeDock::_delete_confirm(bool p_cut) {
 	InspectorDock::get_singleton()->call("_prepare_history");
 	InspectorDock::get_singleton()->update(nullptr);
 	NodeDock::get_singleton()->set_node(nullptr);
+
+	emit_signal("nodes_deleted", paths);
 }
 
 void SceneTreeDock::_update_script_button() {
@@ -4679,6 +4691,7 @@ void SceneTreeDock::_bind_methods() {
 	ADD_SIGNAL(MethodInfo("nodes_reparented", PropertyInfo(Variant::ARRAY, "nodes"), PropertyInfo(Variant::NODE_PATH, "new_parent")));
 	ADD_SIGNAL(MethodInfo("node_created_type", PropertyInfo(Variant::OBJECT, "nodes"), PropertyInfo(Variant::STRING, "type"), PropertyInfo(Variant::BOOL, "is_custom_type"), PropertyInfo(Variant::STRING, "weird_type")));
 	ADD_SIGNAL(MethodInfo("scenes_instantiated", PropertyInfo(Variant::OBJECT, "parent"), PropertyInfo(Variant::PACKED_STRING_ARRAY, "paths"), PropertyInfo(Variant::INT, "index")));
+	ADD_SIGNAL(MethodInfo("nodes_deleted", PropertyInfo(Variant::PACKED_STRING_ARRAY, "paths")));
 }
 
 SceneTreeDock *SceneTreeDock::singleton = nullptr;

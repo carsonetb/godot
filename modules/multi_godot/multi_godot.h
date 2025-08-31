@@ -133,6 +133,7 @@ class MultiGodot : public Node2D {
         void _reparent_nodes(Array paths, String new_path);
         void _create_node(String parent_path, String type, bool is_custom_type, String weird_type);
         void _instantiate_scenes(String parent_path, Vector<String> paths, int index);
+        void _delete_nodes(Vector<String> paths);
 
         // SIGNALS
 
@@ -147,6 +148,7 @@ class MultiGodot : public Node2D {
         void _on_nodes_reparented(Array nodes, NodePath new_parent);
         void _on_node_created(Node *node, String type, bool is_custom_type, String weird_type);
         void _on_scenes_instantiated(Node *parent, Vector<String> paths, int index);
+        void _on_nodes_deleted(Vector<String> paths);
     
     public:
         MultiGodot();
