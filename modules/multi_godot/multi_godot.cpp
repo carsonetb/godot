@@ -1136,7 +1136,7 @@ void MultiGodot::_reparent_nodes(Array paths, String new_parent_path, int pos_in
         to_move.append(node);
     }
 
-    SceneTreeDock::get_singleton()->_do_reparent(parent, pos_in_parent, to_move, true);
+    SceneTreeDock::get_singleton()->_do_reparent(parent, pos_in_parent, to_move, true, false);
 }
 
 void MultiGodot::_create_node(String parent_path, String type, bool is_custom_type, String weird_type) {

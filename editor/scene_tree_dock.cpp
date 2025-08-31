@@ -2372,18 +2372,20 @@ void SceneTreeDock::_node_reparent(NodePath p_path, bool p_keep_global_xform) {
 	_do_reparent(new_parent, -1, nodes, p_keep_global_xform);
 }
 
-void SceneTreeDock::_do_reparent(Node *p_new_parent, int p_position_in_parent, Vector<Node *> p_nodes, bool p_keep_global_xform) {
+void SceneTreeDock::_do_reparent(Node *p_new_parent, int p_position_in_parent, Vector<Node *> p_nodes, bool p_keep_global_xform, bool emit) {
 	ERR_FAIL_NULL(p_new_parent);
 
 	if (p_nodes.is_empty()) {
 		return; // Nothing to reparent.
 	}
 
-	Array paths;
-	for (Node *E : p_nodes) {
-		paths.append(scene_root->get_path_to(E));
+	if (emit) {
+		Array paths;
+		for (Node *E : p_nodes) {
+			paths.append(scene_root->get_path_to(E));
+		}
+		emit_signal("nodes_reparented", paths, scene_root->get_path_to(p_new_parent), p_position_in_parent);
 	}
-	emit_signal("nodes_reparented", paths, scene_root->get_path_to(p_new_parent), p_position_in_parent);
 
 	p_nodes.sort_custom<Node::Comparator>(); //Makes result reliable.
 

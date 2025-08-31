@@ -308,7 +308,7 @@ protected:
 	static void _bind_methods();
 
 public:
-	void _do_reparent(Node *p_new_parent, int p_position_in_parent, Vector<Node *> p_nodes, bool p_keep_global_xform);
+	void _do_reparent(Node *p_new_parent, int p_position_in_parent, Vector<Node *> p_nodes, bool p_keep_global_xform, bool emit = true);
 	EditorSelection *editor_selection = nullptr;
 	Node *edited_scene = nullptr;
 	String get_filter();
