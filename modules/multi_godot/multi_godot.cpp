@@ -1125,16 +1125,18 @@ void MultiGodot::_reparent_nodes(Array paths, String new_parent_path, int pos_in
         return;
     }
 
+    Vector<Node *> to_move;
     for (int i = 0; i < paths.size(); i++) {
-        String path = paths[i];
+        String path = paths.get(i);
         Node *node = root->get_node(path);
         if (!node) {
             print_error("Remote requested to reparent a node at path " + path + " but it doesn't exist.");
             continue;
         }
-        node->reparent(parent);
-        parent->move_child(node, pos_in_parent);
+        to_move.append(node);
     }
+
+    SceneTreeDock::get_singleton()->_do_reparent(parent, pos_in_parent, to_move, true);
 }
 
 void MultiGodot::_create_node(String parent_path, String type, bool is_custom_type, String weird_type) {

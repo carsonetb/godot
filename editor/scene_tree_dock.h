@@ -183,7 +183,6 @@ class SceneTreeDock : public VBoxContainer {
 	void _add_children_to_popup(Object *p_obj, int p_depth);
 
 	void _node_reparent(NodePath p_path, bool p_keep_global_xform);
-	void _do_reparent(Node *p_new_parent, int p_position_in_parent, Vector<Node *> p_nodes, bool p_keep_global_xform);
 
 	void _set_owners(Node *p_owner, const Array &p_nodes);
 
@@ -309,6 +308,7 @@ protected:
 	static void _bind_methods();
 
 public:
+	void _do_reparent(Node *p_new_parent, int p_position_in_parent, Vector<Node *> p_nodes, bool p_keep_global_xform);
 	EditorSelection *editor_selection = nullptr;
 	Node *edited_scene = nullptr;
 	String get_filter();
