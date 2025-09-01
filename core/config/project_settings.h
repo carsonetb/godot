@@ -152,7 +152,7 @@ protected:
 public:
 	static const int CONFIG_VERSION = 5;
 
-	bool _set(const StringName &p_name, const Variant &p_value);
+	bool _set(const StringName &p_name, const Variant &p_value, bool has_signal = true);
 	void set_setting(const String &p_setting, const Variant &p_value);
 	Variant get_setting(const String &p_setting, const Variant &p_default_value = Variant()) const;
 	TypedArray<Dictionary> get_global_class_list();

@@ -1179,7 +1179,7 @@ void MultiGodot::_delete_nodes(Vector<String> paths) {
 }
 
 void MultiGodot::_change_project_setting(String name, Variant value) {
-    ProjectSettings::get_singleton()->set(name, value);
+    ProjectSettings::get_singleton()->set(name, value, false);
 }
 
 // SIGNALS

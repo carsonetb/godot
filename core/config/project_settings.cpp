@@ -274,10 +274,12 @@ String ProjectSettings::globalize_path(const String &p_path) const {
 	return p_path;
 }
 
-bool ProjectSettings::_set(const StringName &p_name, const Variant &p_value) {
+bool ProjectSettings::_set(const StringName &p_name, const Variant &p_value, bool has_signal) {
 	_THREAD_SAFE_METHOD_
 
-	emit_signal("setting_changed_values", p_name, p_value);
+	if (has_signal) {
+		emit_signal("setting_changed_values", p_name, p_value);
+	}
 
 	if (p_value.get_type() == Variant::NIL) {
 		props.erase(p_name);
