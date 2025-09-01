@@ -290,7 +290,7 @@ Vector<String> MultiGodot::_get_file_path_list(String path, String localized_pat
     while (true) {
         file_name = dir->get_next();
         if (file_name == "") break;
-        if (file_name == "." || file_name == ".." || file_name == ".godot") continue;
+        if (file_name == "." || file_name == ".." || file_name == ".godot" || file_name == "godot") continue; // .godot renamed to godot???
 
         String file_path = path + "/" + file_name;
         String localized_file_path = localized_path + "/" + file_name;
@@ -663,6 +663,87 @@ void MultiGodot::_recurse_initiate(Object *obj, String base_path) {
     }
 }
 
+void MultiGodot::_handle_property(Node *root, Variant property, String selected_node_path, String this_property_path) {
+    // This property is new, for example a script was updated
+    if (!previous_property_names.has(this_property_path)) {
+        previous_property_names.append(this_property_path);
+        previous_property_values.append(property);
+        return; // Do we need this return?
+    }
+
+    // Absolutely horrible for performance, should be replaced with a hashmap.
+    int index = previous_property_names.find(this_property_path);
+    Variant previous = previous_property_values.get(index);
+
+    if (property.get_type() == Variant::OBJECT) { // Pointer type, can't be sent over interwebz!
+        Object *child_object = property;
+        if (child_object) {
+            Node *as_node = Object::cast_to<Node>(child_object);
+            if (as_node) {
+                property = root->get_path_to(as_node);
+            }
+            else {
+                if (!previous) {
+                    print_line("Resource created at path " + this_property_path);
+                    _recurse_initiate(child_object, this_property_path);
+                    _call_func(this, "_instantiate_resource", {selected_node_path, this_property_path, child_object->get_class()}); // get_class won't work for gdscript types
+                }
+                else {
+                    _recurse_node_parameters(root, child_object, selected_node_path, this_property_path);
+                }
+                previous_property_values.set(index, property);
+                return;
+            }
+        }
+        else {
+            property = false;
+        }
+    }
+
+    bool is_node_array = false;
+
+    if (property.get_type() == Variant::ARRAY) { // Any other type of packed array is alright.
+        Array as_array = property;
+        for (int i = 0; i < as_array.size(); i++) {
+            _handle_property(root, as_array.get(i), selected_node_path, this_property_path + "/" + String::num_int64(i));
+        }
+        _handle_property(root, as_array.size(), selected_node_path, this_property_path + "/size");
+        return;
+    }
+
+    if (previous == property) {
+        return;
+    }
+    previous_property_values.set(index, property);
+
+    if (VERBOSE_DEBUG) {
+        print_line("Property modified at path " + this_property_path);
+    }
+
+    if (this_property_path == "/name") {
+        Vector<String> split_slashes = selected_node_path.split("/");
+        int last_ind = split_slashes.size() - 1;
+        split_slashes.set(last_ind, previous); // Set name to previous name so it can be accessed on the other side.
+        selected_node_path = "";
+        for (int j = 0; j < split_slashes.size(); j++) {
+            selected_node_path += split_slashes.get(j) + (j == last_ind ? "" : "/");
+        }
+        print_line(selected_node_path);
+    }
+
+    for (int j = 0; j < handshake_completed_with.size(); j++) { // This loop will only happen once in the function.
+        uint64_t other_id = handshake_completed_with[j];
+        if (other_id == steam_id) continue;
+
+        HashMap<String, Variant> other_data = user_data.get(other_id);
+        HashMap<String, Variant> this_data = user_data.get(steam_id);
+        if (!other_data.has("current_scene_path")) continue;
+        if ((String)other_data.get("current_scene_path") != (String)this_data.get("current_scene_path")) continue;
+
+        _call_func(this, "_apply_action", {selected_node_path, this_property_path, property}, other_id);
+    }
+}
+
 void MultiGodot::_recurse_node_parameters(Node *root, Object *obj, String selected_node_path, String modified_param_path) {
     List<PropertyInfo> *property_infos = memnew(List<PropertyInfo>);
     obj->get_property_list(property_infos);
@@ -676,66 +757,7 @@ void MultiGodot::_recurse_node_parameters(Node *root, Object *obj, String select
         String this_param_path = modified_param_path + "/" + info.name;
         Variant current = obj->get(info.name);
 
-        // This property is new, for example a script was updated
-        if (!previous_property_names.has(this_param_path)) {
-            previous_property_names.append(this_param_path);
-            previous_property_values.append(current);
-            continue;
-        }
-
-        int index = previous_property_names.find(this_param_path);
-        Variant previous = previous_property_values.get(index);
-
-        if (current.get_type() == Variant::OBJECT) { // Pointer type, can't be sent over interwebz!
-            Object *child_object = current.operator Object *();
-            if (!previous && child_object) {
-                print_line("Resource created at path " + this_param_path);
-                _recurse_initiate(child_object, this_param_path);
-                _call_func(this, "_instantiate_resource", {selected_node_path, this_param_path, child_object->get_class()});
-                previous_property_values.set(index, current);
-                continue;
-            }
-            if (child_object) {
-                _recurse_node_parameters(root, child_object, selected_node_path, this_param_path);
-                previous_property_values.set(index, current);
-                continue;
-            }
-            else {
-                current = false;
-            }
-        }
-
-        if (previous == current) {
-            continue;
-        }
-        previous_property_values.set(index, current);
-
-        if (VERBOSE_DEBUG) {
-            print_line("Property modified at path " + this_param_path);
-        }
-
-        if (this_param_path == "/name") {
-            Vector<String> split_slashes = selected_node_path.split("/");
-            int last_ind = split_slashes.size() - 1;
-            split_slashes.set(last_ind, previous); // Set name to previous name so it can be accessed on the other side.
-            selected_node_path = "";
-            for (int j = 0; j < split_slashes.size(); j++) {
-                selected_node_path += split_slashes.get(j) + (j == last_ind ? "" : "/");
-            }
-            print_line(selected_node_path);
-        }
-
-        for (int j = 0; j < handshake_completed_with.size(); j++) { // This loop will only happen once in the function.
-            uint64_t other_id = handshake_completed_with[j];
-            if (other_id == steam_id) continue;
-
-            HashMap<String, Variant> other_data = user_data.get(other_id);
-            HashMap<String, Variant> this_data = user_data.get(steam_id);
-            if (!other_data.has("current_scene_path")) continue;
-            if ((String)other_data.get("current_scene_path") != (String)this_data.get("current_scene_path")) continue;
-
-            _call_func(this, "_apply_action", {selected_node_path, this_param_path, current}, other_id);
-        }
+        _handle_property(root, current, selected_node_path, this_param_path);
     }
 }
 
@@ -1050,21 +1072,40 @@ void MultiGodot::_set_as_script_owner(String path) {
 
 void MultiGodot::_apply_action(String node_path, String property_path, Variant new_value) {
     Object *modified_on = EditorNode::get_singleton()->get_edited_scene()->get_node(node_path);
+    if (modified_on == nullptr) {
+        print_error("Remote tried to set property on node " + node_path + " but it does not exist.");
+        return;
+    }
 
     Vector<String> split_slashes = property_path.split("/");
     for (int i = 0; i < split_slashes.size(); i++) {
         String property = split_slashes[i];
         if (property == "") continue;
 
-        if (modified_on->get_static_property_type(property) == Variant::NIL) {
-            print_error("Tried to set property " + property_path + " on a node at path " + node_path + " but the property doesn't exist (property name " + property + ")");
-            return;
-        }
-
         if (i == split_slashes.size() - 1) {
             modified_on->set(property, new_value);
         }
         else {
+            Variant as_variant = modified_on->get(property);
+            if (as_variant && as_variant.get_type() == Variant::ARRAY) {
+                Array as_array = as_variant;
+                i += 1;
+                String array_property = split_slashes[i];
+                if (i == split_slashes.size() - 1) { // When i += 1 maybe now we are at the end of the array?
+                    if (array_property == "size") {
+                        as_array.resize(new_value);
+                    }
+                    else {
+                        as_array.set(array_property.to_int(), new_value);
+                        modified_on->set(property, as_array);
+                    }
+                    return;
+                }
+                else {
+                    modified_on = as_array.get(array_property.to_int());
+                    continue;
+                }
+            }
             modified_on = modified_on->get(property);
             if (!modified_on) {
                 print_error("Remote requested to change a property at path " + property_path + " but couldn't resolve path.");
@@ -1179,7 +1220,7 @@ void MultiGodot::_delete_nodes(Vector<String> paths) {
 }
 
 void MultiGodot::_change_project_setting(String name, Variant value) {
-    ProjectSettings::get_singleton()->set(name, value, false);
+    ProjectSettings::get_singleton()->_set(name, value, false);
 }
 
 // SIGNALS

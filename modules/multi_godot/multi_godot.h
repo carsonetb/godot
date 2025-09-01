@@ -108,6 +108,7 @@ class MultiGodot : public Node2D {
         void _sync_scenes();
         void _sync_colab_scenes();
         void _recurse_initiate(Object *selected, String base_path = "");
+        void _handle_property(Node *root, Variant property, String selected_node_path, String this_property_path);
         void _recurse_node_parameters(Node *root, Object *selected, String selected_node_path, String modified_param_path = "");
         void _sync_filesystem();
         void _sync_created_deleted_files();
