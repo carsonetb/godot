@@ -37,6 +37,7 @@ void MultiGodot::_bind_methods() {
     ClassDB::bind_method(D_METHOD("_on_node_created", "node", "type", "is_custom_type", "weird_type"), &MultiGodot::_on_node_created);
     ClassDB::bind_method(D_METHOD("_on_scenes_instantiated", "parent", "paths", "index"), &MultiGodot::_on_scenes_instantiated);
     ClassDB::bind_method(D_METHOD("_on_nodes_deleted", "nodes"), &MultiGodot::_on_nodes_deleted);
+    ClassDB::bind_method(D_METHOD("_on_settings_changed", "name", "value"), &MultiGodot::_on_settings_changed);
 
     // Remote Callables
 
@@ -58,6 +59,7 @@ void MultiGodot::_bind_methods() {
     ClassDB::bind_method(D_METHOD("_create_node", "parent_path", "type", "is_custom_type", "weird_type"), &MultiGodot::_create_node);
     ClassDB::bind_method(D_METHOD("_instantiate_scenes", "parent_path", "paths", "index"), &MultiGodot::_instantiate_scenes);
     ClassDB::bind_method(D_METHOD("_delete_nodes", "paths"), &MultiGodot::_delete_nodes);
+    ClassDB::bind_method(D_METHOD("_change_project_setting", "name", "value"), &MultiGodot::_change_project_setting);
 
     // Button signals
 
@@ -126,6 +128,7 @@ void MultiGodot::_ready() {
 
     SceneTreeDock *scene_tree_dock = SceneTreeDock::get_singleton();
 
+    Error err = ProjectSettings::get_singleton()->connect("setting_changed_values", Callable(this, "_on_settings_changed"));
     scene_tree_dock->connect("nodes_reparented", Callable(this, "_on_nodes_reparented"));
     scene_tree_dock->connect("node_created_type", Callable(this, "_on_node_created"));
     scene_tree_dock->connect("scenes_instantiated", Callable(this, "_on_scenes_instantiated"));
@@ -157,8 +160,6 @@ void MultiGodot::_ready() {
 }
 
 void MultiGodot::_process() {
-    steam->run_callbacks();
-
     if (!is_lobby_joined) {
         return;
     }
@@ -1177,6 +1178,10 @@ void MultiGodot::_delete_nodes(Vector<String> paths) {
     }
 }
 
+void MultiGodot::_change_project_setting(String name, Variant value) {
+    ProjectSettings::get_singleton()->set(name, value);
+}
+
 // SIGNALS
 
 void MultiGodot::_on_lobby_created(int connect, uint64_t this_lobby_id) {
@@ -1363,6 +1368,16 @@ void MultiGodot::_on_nodes_deleted(Vector<String> paths) {
         print_line("Some scenes were deleted");
     }
     _call_func(this, "_delete_nodes", {paths});
+}
+
+void MultiGodot::_on_settings_changed(String name, Variant value) {
+    if (name == "application/config/features") { // Gets changed a lot, renderer and version info.
+        return;
+    }
+    if (VERBOSE_DEBUG) {
+        print_line("ProjectSettings setting changed: " + name);
+    }
+    _call_func(this, "_change_project_setting", {name, value});
 }
 
 // PLUGIN

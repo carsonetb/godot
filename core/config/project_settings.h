@@ -111,7 +111,6 @@ protected:
 
 	String project_data_dir_name;
 
-	bool _set(const StringName &p_name, const Variant &p_value);
 	bool _get(const StringName &p_name, Variant &r_ret) const;
 	void _get_property_list(List<PropertyInfo> *p_list) const;
 	bool _property_can_revert(const StringName &p_name) const;
@@ -153,6 +152,7 @@ protected:
 public:
 	static const int CONFIG_VERSION = 5;
 
+	bool _set(const StringName &p_name, const Variant &p_value);
 	void set_setting(const String &p_setting, const Variant &p_value);
 	Variant get_setting(const String &p_setting, const Variant &p_default_value = Variant()) const;
 	TypedArray<Dictionary> get_global_class_list();

@@ -16,6 +16,10 @@ wrote which part of the codebase.
 GitHub usernames are indicated in parentheses, or as sole entry when no other
 name is available.
 
+## MultiGodot (lol)
+
+    carsonetb
+
 ## Project Founders
 
     Juan Linietsky (reduz)

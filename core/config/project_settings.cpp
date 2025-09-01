@@ -277,6 +277,8 @@ String ProjectSettings::globalize_path(const String &p_path) const {
 bool ProjectSettings::_set(const StringName &p_name, const Variant &p_value) {
 	_THREAD_SAFE_METHOD_
 
+	emit_signal("setting_changed_values", p_name, p_value);
+
 	if (p_value.get_type() == Variant::NIL) {
 		props.erase(p_name);
 		if (p_name.operator String().begins_with("autoload/")) {
@@ -1472,6 +1474,7 @@ void ProjectSettings::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("save_custom", "file"), &ProjectSettings::_save_custom_bnd);
 
 	ADD_SIGNAL(MethodInfo("settings_changed"));
+	ADD_SIGNAL(MethodInfo("setting_changed_values", PropertyInfo(Variant::STRING_NAME, "name"), PropertyInfo("value")));
 }
 
 void ProjectSettings::_add_builtin_input_map() {
