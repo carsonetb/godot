@@ -129,7 +129,7 @@ class MultiGodot : public Node2D {
         void _rename_file(String from, String to);
         void _sync_user_data(uint64_t user_id, Dictionary data);
         void _set_as_script_owner(String path);
-        void _apply_action(String node_path, String property_path, Variant value);
+        void _apply_action(String node_path, String property_path, Variant value, bool path_to_node = false);
         void _instantiate_resource(String node_path, String resource_path, String type);
         void _reparent_nodes(Array paths, String new_path, int pos_in_parent);
         void _create_node(String parent_path, String type, bool is_custom_type, String weird_type);

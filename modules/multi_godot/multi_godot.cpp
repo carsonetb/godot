@@ -675,12 +675,15 @@ void MultiGodot::_handle_property(Node *root, Variant property, String selected_
     int index = previous_property_names.find(this_property_path);
     Variant previous = previous_property_values.get(index);
 
+    bool path_to_node = false;
+
     if (property.get_type() == Variant::OBJECT) { // Pointer type, can't be sent over interwebz!
         Object *child_object = property;
         if (child_object) {
             Node *as_node = Object::cast_to<Node>(child_object);
             if (as_node) {
                 property = root->get_path_to(as_node);
+                path_to_node = true;
             }
             else {
                 if (!previous) {
@@ -699,8 +702,6 @@ void MultiGodot::_handle_property(Node *root, Variant property, String selected_
             property = false;
         }
     }
-
-    bool is_node_array = false;
 
     if (property.get_type() == Variant::ARRAY) { // Any other type of packed array is alright.
         Array as_array = property;
@@ -740,7 +741,7 @@ void MultiGodot::_handle_property(Node *root, Variant property, String selected_
         if (!other_data.has("current_scene_path")) continue;
         if ((String)other_data.get("current_scene_path") != (String)this_data.get("current_scene_path")) continue;
 
-        _call_func(this, "_apply_action", {selected_node_path, this_property_path, property}, other_id);
+        _call_func(this, "_apply_action", {selected_node_path, this_property_path, property, path_to_node}, other_id);
     }
 }
 
@@ -1070,11 +1071,16 @@ void MultiGodot::_set_as_script_owner(String path) {
     _set_user_data_for_everyone("current_spectating_script", "");
 }
 
-void MultiGodot::_apply_action(String node_path, String property_path, Variant new_value) {
-    Object *modified_on = EditorNode::get_singleton()->get_edited_scene()->get_node(node_path);
+void MultiGodot::_apply_action(String node_path, String property_path, Variant new_value, bool path_to_node) {
+    Node *root = EditorNode::get_singleton()->get_edited_scene();
+    Object *modified_on = root->get_node(node_path);
     if (modified_on == nullptr) {
         print_error("Remote tried to set property on node " + node_path + " but it does not exist.");
         return;
+    }
+
+    if (path_to_node) {
+        new_value = root->get_node(new_value);
     }
 
     Vector<String> split_slashes = property_path.split("/");
