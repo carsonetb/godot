@@ -99,6 +99,8 @@ void MultiGodot::_ready() {
         ClassDB::register_class<MultiGodot>();
     } else {
         print_error("Steam module not found! MultiGodot will not be registered.");
+        print_error("Shutting down MultiGodot.");
+        queue_free();
         return;
     }
 
@@ -128,7 +130,7 @@ void MultiGodot::_ready() {
 
     SceneTreeDock *scene_tree_dock = SceneTreeDock::get_singleton();
 
-    Error err = ProjectSettings::get_singleton()->connect("setting_changed_values", Callable(this, "_on_settings_changed"));
+    ProjectSettings::get_singleton()->connect("setting_changed_values", Callable(this, "_on_settings_changed"));
     scene_tree_dock->connect("nodes_reparented", Callable(this, "_on_nodes_reparented"));
     scene_tree_dock->connect("node_created_type", Callable(this, "_on_node_created"));
     scene_tree_dock->connect("scenes_instantiated", Callable(this, "_on_scenes_instantiated"));
@@ -152,7 +154,7 @@ void MultiGodot::_ready() {
         "current_scene_path",
     };
 
-    const Vector<Variant> initial_values = {0, 0, "", "", ""};
+    const Vector<Variant> initial_values = {0, 0, "<null>", "<null>", "<null>"};
 
     for (int i = 0; i < initial_keys.size(); i++) {
         _set_user_data(steam_id, initial_keys[i], initial_values[i]);
@@ -546,10 +548,10 @@ void MultiGodot::_sync_live_edits() {
     }
 
     HashMap<String, Variant> this_data = user_data[steam_id];
-    if ((int)this_data["editor_tab_index"] != SCRIPT_EDITOR) {
+    if ((int)this_data["editor_tab_index"] != SCRIPT_EDITOR || (String)this_data["current_script_path"] == "<null>") {
         return;
     }
-    if ((String)this_data["current_script_path"] == "") {
+    if ((String)this_data["current_script_path"] == "" && (String)this_data["current_spectating_script"] != "") {
         int last_caret_line = editor->get_caret_line();
         int last_caret_column = editor->get_caret_column();
         editor->set_text(live_last_code);
