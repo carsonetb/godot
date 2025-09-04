@@ -8,6 +8,7 @@
 #include "core/variant/variant_utility.h"
 #include "editor/code_editor.h"
 #include "editor/editor_file_system.h"
+#include "editor/editor_inspector.h"
 #include "editor/editor_interface.h"
 #include "editor/editor_main_screen.h"
 #include "editor/editor_undo_redo_manager.h"
@@ -38,6 +39,7 @@ void MultiGodot::_bind_methods() {
     ClassDB::bind_method(D_METHOD("_on_scenes_instantiated", "parent", "paths", "index"), &MultiGodot::_on_scenes_instantiated);
     ClassDB::bind_method(D_METHOD("_on_nodes_deleted", "nodes"), &MultiGodot::_on_nodes_deleted);
     ClassDB::bind_method(D_METHOD("_on_settings_changed", "name", "value"), &MultiGodot::_on_settings_changed);
+    ClassDB::bind_method(D_METHOD("_on_edited_object_changed"), &MultiGodot::_on_edited_object_changed);
 
     // Remote Callables
 
@@ -130,6 +132,7 @@ void MultiGodot::_ready() {
 
     SceneTreeDock *scene_tree_dock = SceneTreeDock::get_singleton();
 
+    EditorInterface::get_singleton()->get_inspector()->connect("edited_object_changed", Callable(this, "_on_edited_object_changed"));
     ProjectSettings::get_singleton()->connect("setting_changed_values", Callable(this, "_on_settings_changed"));
     scene_tree_dock->connect("nodes_reparented", Callable(this, "_on_nodes_reparented"));
     scene_tree_dock->connect("node_created_type", Callable(this, "_on_node_created"));
@@ -152,9 +155,10 @@ void MultiGodot::_ready() {
         "current_script_path",
         "current_spectating_script",
         "current_scene_path",
+        "selected_resource_path",
     };
 
-    const Vector<Variant> initial_values = {0, 0, "<null>", "<null>", "<null>"};
+    const Vector<Variant> initial_values = {0, 0, "<null>", "<null>", "<null>", ""};
 
     for (int i = 0; i < initial_keys.size(); i++) {
         _set_user_data(steam_id, initial_keys[i], initial_values[i]);
@@ -178,6 +182,8 @@ void MultiGodot::_process() {
 
     _sync_scenes();
     _sync_colab_scenes();
+
+    _sync_edited_resource();
 
     _update_editor_menus();
     
@@ -855,6 +861,42 @@ void MultiGodot::_update_editor_menus() {
     }
 }
 
+void MultiGodot::_sync_edited_resource() {
+    HashMap<String, Variant> this_user_data = user_data.get(steam_id);
+    String path = this_user_data.get("selected_resource_path");
+    if (path == "<null>" || path == "") {
+        return;
+    }
+    
+    if (!(path.ends_with(".tscn") || path.ends_with(".scn") || path.ends_with(".tres") || path.ends_with(".res"))) { // Native resource types.
+        path += ".import";
+    }
+    Ref<FileAccess> file_access = FileAccess::open(path, FileAccess::READ);
+    String current_resource_file_contents = file_access->get_as_text();
+    file_access->close();
+
+    if (current_resource_file_contents == last_resource_file_contents) {
+        return;
+    }
+    last_resource_file_contents = current_resource_file_contents;
+
+    if (VERBOSE_DEBUG) {
+        print_line("Resource with file path " + path + " changed. Syncing to clients.");
+    }
+
+    for (int i = 0; i < handshake_completed_with.size(); i++) {
+        uint64_t this_steam_id = handshake_completed_with.get(i);
+        HashMap<String, Variant> this_data = user_data.get(this_steam_id); // Holy confusing name
+        String this_path = this_data.get("selected_resource_path");
+        if (this_path != path) {
+            _call_func(this, "_receive_file_contents", {path, current_resource_file_contents}, this_steam_id);
+        }
+        else {
+            print_error("A remote user somehow is selecting the same resource as us.");
+        }
+    }
+}
+
 // REMOTE CALLABLES
 
 void MultiGodot::_set_mouse_position(uint64_t sender, Vector2 pos) { 
@@ -1095,7 +1137,7 @@ void MultiGodot::_apply_action(String node_path, String property_path, Variant n
         }
         else {
             Variant as_variant = modified_on->get(property);
-            if (as_variant && as_variant.get_type() == Variant::ARRAY) {
+            if (as_variant.get_type() == Variant::ARRAY) {
                 Array as_array = as_variant;
                 i += 1;
                 String array_property = split_slashes[i];
@@ -1429,6 +1471,29 @@ void MultiGodot::_on_settings_changed(String name, Variant value) {
     _call_func(this, "_change_project_setting", {name, value});
 }
 
+void MultiGodot::_on_edited_object_changed() {
+    EditorInspector *editor_inspector = EditorInterface::get_singleton()->get_inspector();
+    Object *edited_object = editor_inspector->get_edited_object();
+    Resource *as_resource = Object::cast_to<Resource>(edited_object);
+    HashMap<String, Variant> this_user_data = user_data.get(steam_id);
+    if (as_resource == nullptr) { // We only want resources.
+        _set_user_data_for_everyone("selected_resource_path", "<null>");
+        return;
+    }
+    String path = as_resource->get_path();
+    if (path.find("tscn") != -1) { // I don't think this can happen but just in case.
+        _set_user_data_for_everyone("selected_resource_path", "<null>");
+        return;
+    }
+    for (int i = 0; i < handshake_completed_with.size(); i++) {
+        if ((String)user_data.get(handshake_completed_with.get(i)).get("selected_resource_path") == path) {
+            editor_inspector->edit(previous_edited_object); // If someone is editing this one, revert to the old one.
+            return;
+        }
+    }
+    previous_edited_object = edited_object;
+    _set_user_data_for_everyone("selected_resource_path", path);
+}
 // PLUGIN
 
 MultiGodotPlugin::MultiGodotPlugin() {

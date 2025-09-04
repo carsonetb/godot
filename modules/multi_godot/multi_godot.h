@@ -60,6 +60,7 @@ class MultiGodot : public Node2D {
         String script_editor_previous_line_text;
         String last_scene_data;
         String last_selected_path;
+        String last_resource_file_contents;
         Vector<HashMap<String, Variant>> lobby_members;
         Vector<String> new_files;
         Vector<String> deleted_files; // Both this and new_files will fill up if not cleaned up by the main thread.
@@ -69,6 +70,7 @@ class MultiGodot : public Node2D {
         Vector<uint64_t> steam_ids;
         Thread filesystem_scanner;
         Mutex mutex;
+        Object *previous_edited_object;
 
         // REMOTE PROPERTIES
 
@@ -114,6 +116,7 @@ class MultiGodot : public Node2D {
         void _sync_created_deleted_files();
         void _set_user_data_for_everyone(String item, Variant value);
         void _update_editor_menus();
+        void _sync_edited_resource();
 
         // REMOTE CALLABLES
 
@@ -152,6 +155,7 @@ class MultiGodot : public Node2D {
         void _on_scenes_instantiated(Node *parent, Vector<String> paths, int index);
         void _on_nodes_deleted(Vector<String> paths);
         void _on_settings_changed(String name, Variant value);
+        void _on_edited_object_changed();
     
     public:
         MultiGodot();
